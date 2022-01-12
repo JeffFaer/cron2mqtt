@@ -7,6 +7,7 @@ require (
 	github.com/google/go-cmp v0.5.6
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.0
+	golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
 )
 
 require (

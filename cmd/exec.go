@@ -13,8 +13,9 @@ import (
 
 func init() {
 	rootCmd.AddCommand(&cobra.Command{
-		Use:  "exec",
-		Args: cobra.MinimumNArgs(2),
+		Use:   "exec",
+		Short: "Executes a command, and publishes its results to MQTT.",
+		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, configErr := loadConfig()
 			if configErr != nil {
