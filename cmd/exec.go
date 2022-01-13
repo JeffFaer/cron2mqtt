@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/JeffreyFalgout/cron-mqtt/exec"
-	"github.com/JeffreyFalgout/cron-mqtt/mqtt"
-	"github.com/JeffreyFalgout/cron-mqtt/mqtt/hass"
+	"github.com/JeffreyFalgout/cron2mqtt/exec"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
 )
 
 func init() {

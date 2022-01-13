@@ -8,8 +8,8 @@ import (
 	"os/user"
 	"regexp"
 
-	"github.com/JeffreyFalgout/cron-mqtt/exec"
-	"github.com/JeffreyFalgout/cron-mqtt/mqtt"
+	"github.com/JeffreyFalgout/cron2mqtt/exec"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 )
 
 const (

@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/term"
 
-	"github.com/JeffreyFalgout/cron-mqtt/mqtt"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 )
 
 func init() {

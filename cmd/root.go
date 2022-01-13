@@ -7,7 +7,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use: "cron-mqtt",
+	Use: "cron2mqtt",
 }
 
 func Execute() {

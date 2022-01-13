@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/JeffreyFalgout/cron-mqtt/cmd"
+	"github.com/JeffreyFalgout/cron2mqtt/cmd"
 )
 
 func main() {

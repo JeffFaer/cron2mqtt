@@ -1,4 +1,4 @@
-module github.com/JeffreyFalgout/cron-mqtt
+module github.com/JeffreyFalgout/cron2mqtt
 
 go 1.17
 
