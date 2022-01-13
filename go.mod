@@ -3,6 +3,8 @@ module github.com/JeffreyFalgout/cron2mqtt
 go 1.17
 
 require (
+	github.com/btcsuite/btcutil v1.0.2
+	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/google/go-cmp v0.5.6
 	github.com/spf13/cobra v1.3.0

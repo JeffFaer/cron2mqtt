@@ -1,12 +1,16 @@
 package hass
 
 import (
+	"crypto/hmac"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/user"
 	"regexp"
+
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/denisbrodbeck/machineid"
 
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
@@ -50,7 +54,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 		return nil, err
 	}
 
-	nodeID := fmt.Sprintf("cron_job_%s_%s", d.user, d.host)
+	nodeID := fmt.Sprintf("cron_job_%s_%s", d.user.Uid, d.id)
 	if err := validateTopicComponent(nodeID); err != nil {
 		return nil, fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
@@ -63,11 +67,11 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 
 		"unique_id": id,
 		"device": map[string]interface{}{
-			"name":        d.host,
-			"identifiers": d.macIDs,
+			"name":        d.hostname,
+			"identifiers": []string{d.id},
 		},
 		"object_id":    id,
-		"name":         fmt.Sprintf("[%s@%s] %s", d.user, d.host, cmd),
+		"name":         fmt.Sprintf("[%s@%s] %s", d.user.Username, d.hostname, cmd),
 		"device_class": "problem",
 		"icon":         "mdi:robot",
 
@@ -139,11 +143,16 @@ func (c *CronJob) PublishResults(res exec.Result) error {
 }
 
 type device struct {
-	user, host string
-	macIDs     []string
+	id       string
+	user     *user.User
+	hostname string
 }
 
 func currentDevice() (device, error) {
+	id, err := machineid.ID()
+	if err != nil {
+		return device{}, fmt.Errorf("could not determine machineid: %w", err)
+	}
 	u, err := user.Current()
 	if err != nil {
 		return device{}, fmt.Errorf("could not determine current user: %w", err)
@@ -153,20 +162,12 @@ func currentDevice() (device, error) {
 		return device{}, fmt.Errorf("could not determine hostname: %w", err)
 	}
 
-	d := device{u.Username, h, nil}
+	return device{protect(id), u, h}, nil
+}
 
-	ifs, err := net.Interfaces()
-	if err == nil {
-		for _, i := range ifs {
-			if i.Flags&net.FlagUp != 0 && len(i.HardwareAddr) > 0 {
-				// Skip locally administered addresses
-				if i.HardwareAddr[0]&2 == 2 {
-					continue
-				}
-				d.macIDs = append(d.macIDs, i.HardwareAddr.String())
-			}
-		}
-	}
-
-	return d, nil
+func protect(id string) string {
+	mac := hmac.New(md5.New, []byte(id))
+	mac.Write([]byte("cron2mqtt"))
+	b := mac.Sum(nil)
+	return base58.Encode(b)
 }
