@@ -54,7 +54,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 		return nil, err
 	}
 
-	nodeID := fmt.Sprintf("cron_job_%s_%s", d.user.Uid, d.id)
+	nodeID := fmt.Sprintf("cron2mqtt_%s_%s", d.id, d.user.Uid)
 	if err := ValidateTopicComponent(nodeID); err != nil {
 		return nil, fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
