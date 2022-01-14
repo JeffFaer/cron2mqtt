@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os/exec"
 	"os/user"
+	"path"
 	"strings"
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/google/shlex"
 	cron "github.com/robfig/cron/v3"
 )
 
@@ -66,15 +68,7 @@ type Job struct {
 	sep1     string
 	user     *string
 	sep2     string
-	cmd      string
-}
-
-func (j *Job) Command() string {
-	return j.cmd
-}
-
-func (j *Job) PrefixCommand(s string) {
-	j.cmd = s + " " + j.cmd
+	Command  *Command
 }
 
 func (j *Job) String() string {
@@ -85,7 +79,7 @@ func (j *Job) String() string {
 		b.WriteString(*j.user)
 		b.WriteString(j.sep2)
 	}
-	b.WriteString(j.cmd)
+	b.WriteString(j.Command.String())
 	return b.String()
 }
 func (*Job) isEntry() {}
@@ -93,6 +87,31 @@ func (*Job) isEntry() {}
 type schedule struct {
 	schedule cron.Schedule
 	orig     string
+}
+
+type Command struct {
+	args []string
+	orig string
+}
+
+// Prefix appends s as a prefix to this Command.
+func (c *Command) Prefix(s string) error {
+	args, err := shlex.Split(s)
+	if err != nil {
+		return fmt.Errorf("prefix %q is invalid: %w", s, err)
+	}
+	c.args = append(args, c.args...)
+	c.orig = s + " " + c.orig
+	return nil
+}
+
+// IsCron2Mqtt checks whether this command appears to execute cron2mqtt.
+func (c *Command) IsCron2Mqtt() bool {
+	return path.Base(c.args[0]) == "cron2mqtt"
+}
+
+func (c *Command) String() string {
+	return c.orig
 }
 
 func parse(crontab string, includesUser bool) (Tab, error) {
@@ -127,22 +146,21 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 			return Tab{}, fmt.Errorf("crontab has a badly formed line: %q", l)
 		}
 
-		var sched strings.Builder
+		var s strings.Builder
 		i := 0
 		for ; i < 5; i++ {
-			sched.WriteString(seps[i])
-			sched.WriteString(fs[i])
+			s.WriteString(seps[i])
+			s.WriteString(fs[i])
 		}
-
-		schedu, err := cron.ParseStandard(sched.String())
+		sched, err := cron.ParseStandard(s.String())
 		if err != nil {
-			return Tab{}, fmt.Errorf("crontab has a malformed schedule %q: %w", sched.String(), err)
+			return Tab{}, fmt.Errorf("crontab has a malformed schedule %q: %w", s.String(), err)
 		}
 
 		var j Job
 		j.schedule = schedule{
-			schedule: schedu,
-			orig:     sched.String(),
+			schedule: sched,
+			orig:     s.String(),
 		}
 		j.sep1 = seps[i]
 		if includesUser {
@@ -150,7 +168,14 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 			i++
 			j.sep2 = seps[i]
 		}
-		j.cmd = fs[i]
+		args, err := shlex.Split(fs[i])
+		if err != nil {
+			return Tab{}, fmt.Errorf("crontab has a malformded command %q: %w", fs[i], err)
+		}
+		j.Command = &Command{
+			args: args,
+			orig: fs[i],
+		}
 
 		t.entries = append(t.entries, &j)
 		t.jobs = append(t.jobs, &j)
@@ -167,8 +192,14 @@ func isComment(s string) bool {
 	return strings.HasPrefix(strings.TrimSpace(s), "#")
 }
 
-// fieldsN splits s into n fields separates by consecutive whitespace characters.
+// fieldsN splits s into n fields separated by consecutive whitespace characters.
 // s = seps[0] + fields[0] + seps[1] + fields[1] + ... + fields[n] + seps[n+1]
+// fields is limited to n entries. That means the first n-1 entries are guaranteed
+// to not contain any whitespace characters, but the last entry might contain whitespace.
+// e.g.
+// s = " a b c d ", n = 3
+// seps = [" ", " ", " ", " "]
+// fields = ["a", "b", "c d"]
 func fieldsN(s string, n int) (seps []string, fields []string) {
 	i := 0
 	wasSpace := true

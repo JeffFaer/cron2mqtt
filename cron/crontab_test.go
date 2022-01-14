@@ -174,3 +174,42 @@ func TestCrontabRoundtrip(t *testing.T) {
 		})
 	}
 }
+
+func TestParse(t *testing.T) {
+	cmd1 := "* * * * * foo echo 1 2 3"
+	cmd2 := "* * * * * bar echo 4 5 6"
+	tab, err := parse(cmd1+"\n"+cmd2, true)
+	if err != nil {
+		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
+	}
+
+	var jobs []string
+	for _, j := range tab.Jobs() {
+		jobs = append(jobs, j.String())
+	}
+
+	if diff := cmp.Diff([]string{cmd1, cmd2}, jobs); diff != "" {
+		t.Errorf("jobs diff (-want +got):\n%s", diff)
+	}
+}
+
+func TestPrefix(t *testing.T) {
+	cmd1 := "* * * * * foo echo 1 2 3"
+	cmd2 := "* * * * * bar echo 4 5 6"
+	tab, err := parse(cmd1+"\n"+cmd2, true)
+	if err != nil {
+		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
+	}
+
+	if err := tab.Jobs()[1].PrefixCommand("cron2mqtt exec abcd"); err != nil {
+		t.Errorf("PrefixCommand(cron2mqtt exec abcd) has an error: %s", err)
+	}
+	var jobs []string
+	for _, j := range tab.Jobs() {
+		jobs = append(jobs, j.String())
+	}
+
+	if diff := cmp.Diff([]string{cmd1, "* * * * * bar cron2mqtt exec abcd echo 4 5 6"}, jobs); diff != "" {
+		t.Errorf("jobs diff (-want +got):\n%s", diff)
+	}
+}

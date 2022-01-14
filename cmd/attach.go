@@ -16,6 +16,8 @@ import (
 
 var (
 	exe string
+
+	dryRun bool
 )
 
 func init() {
@@ -25,7 +27,7 @@ func init() {
 		panic(fmt.Errorf("couldn't determine path of current executable: %w", err))
 	}
 
-	rootCmd.AddCommand(&cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "attach",
 		Short: "Attaches monitoring to existing cron jobs.",
 		Args:  cobra.ExactArgs(0),
@@ -39,7 +41,9 @@ func init() {
 			attachUser(u)
 			return nil
 		},
-	})
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry_run", false, "Print the updated crontabs instead of actually updating them.")
+	rootCmd.AddCommand(cmd)
 }
 
 func attachUser(u *user.User) {
@@ -50,19 +54,27 @@ func attachUser(u *user.User) {
 	}
 
 	if attachTo(tab) {
-		if err := cron.Update(u, tab); err != nil {
-			fmt.Fprintf(os.Stderr, "Could not update crontab for %q: %s\n", u.Username, err)
+		if dryRun {
+			fmt.Print(tab)
+		} else {
+			if err := cron.Update(u, tab); err != nil {
+				fmt.Fprintf(os.Stderr, "Could not update crontab for %q: %s\n", u.Username, err)
+			}
 		}
 	}
 
 }
 
 func attachTo(t cron.Tab) (updated bool) {
-	for _, j := range t.Jobs() {
-		// TODO: Skip jobs that already have monitoring.
+	for i, j := range t.Jobs() {
+		if j.Command.IsCron2Mqtt() {
+			fmt.Printf("  Skipping job #%d: It already appears to be monitored.\n", i+1)
+			continue
+		}
+
 		fmt.Println()
 		fmt.Println()
-		fmt.Printf("  $ %s\n", j.Command())
+		fmt.Printf("  $ %s\n", j.Command.String())
 		fmt.Println()
 		fmt.Printf("  Do you want to attach monitoring to this cron job? [yN] ")
 		var sel string
@@ -73,7 +85,7 @@ func attachTo(t cron.Tab) (updated bool) {
 
 		id := promptID()
 
-		j.PrefixCommand(fmt.Sprintf("%s exec %s", exe, id))
+		j.Command.Prefix(fmt.Sprintf("%s exec %s", exe, id))
 		// TODO: Also update MQTT with the configuration of this cron job, even though it hasn't run yet.
 		updated = true
 	}
