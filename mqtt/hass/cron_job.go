@@ -59,6 +59,9 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 		return nil, fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
 
+	// TODO: Should we be checking to see if the config already exists?
+	//       Does publishing the config again reset any of the entity's history?
+	//       What happens if we change the entity in the UI (e.g. change its icon), then publish the config again?
 	baseTopic := fmt.Sprintf("%s/binary_sensor/%s/%s", discoveryPrefix, nodeID, id)
 	conf := map[string]interface{}{
 		"~":                     baseTopic,
@@ -125,6 +128,7 @@ func (c *CronJob) PublishResults(res exec.Result) error {
 		"stdout":      string(res.Stdout),
 		"stderr":      string(res.Stderr),
 		"exit_code":   res.ExitCode,
+		// TODO: Include an attribute for the estimated next execution time, if we can find the schedule for this cron job.
 	}
 	b, err := json.Marshal(attr)
 	if err != nil {
