@@ -17,6 +17,7 @@ func init() {
 	viper.SetConfigType("json")
 	viper.AddConfigPath("$HOME/.config")
 
+	var broker, username, serverName string
 	var setPassword bool
 	configure := &cobra.Command{
 		Use:   "configure",
@@ -24,14 +25,15 @@ func init() {
 		Long:  "The configuration will be written to a per-user config file. This is to prevent passwords from being more visible than strictly necessary.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if broker == "" && username == "" && serverName == "" && !setPassword {
+				return fmt.Errorf("configure must be called with at least one of its flags")
+			}
+
 			if setPassword {
-				fmt.Println("NOTE: Passwords are sent without any additional encryption. It's strongly recommended that you use ssl:// so that passwords don't show up as plaintext to everyone on your network.")
-				fmt.Print("Enter password: ")
-				pwd, err := term.ReadPassword(int(syscall.Stdin))
+				pwd, err := promptPassword()
 				if err != nil {
 					return err
 				}
-				fmt.Println()
 				viper.Set("password", string(pwd))
 			}
 
@@ -69,16 +71,24 @@ func init() {
 			return nil
 		},
 	}
-	configure.Flags().String("broker", "", "The broker to connect to. Should be of the form scheme://host:port where scheme is one of tcp, ssl, ws.")
-	configure.Flags().String("username", "", "The username to use when connecting to the broker.")
+	configure.Flags().StringVar(&broker, "broker", "", "The broker to connect to. Should be of the form scheme://host:port where scheme is one of tcp, ssl, ws.")
+	configure.Flags().StringVar(&username, "username", "", "The username to use when connecting to the broker.")
 	configure.Flags().BoolVar(&setPassword, "password", false, "Indicates that you want to configure the password used to connect to the broker. You will be prompted to enter the password through stdin.")
-	configure.Flags().String("server_name", "", "Overrides the broker's host name when doing ssl verification.")
+	configure.Flags().StringVar(&serverName, "server_name", "", "Overrides the broker's host name when doing ssl verification.")
 
 	viper.BindPFlag("broker", configure.Flags().Lookup("broker"))
 	viper.BindPFlag("username", configure.Flags().Lookup("username"))
 	viper.BindPFlag("server_name", configure.Flags().Lookup("server_name"))
 
 	rootCmd.AddCommand(configure)
+}
+
+func promptPassword() ([]byte, error) {
+	fmt.Println("NOTE: Passwords are sent without any additional encryption. It's strongly recommended that you use ssl:// so that passwords don't show up as plaintext to everyone on your network.")
+	fmt.Print("Enter password: ")
+	pwd, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	return pwd, err
 }
 
 func loadConfig() (mqtt.Config, error) {

@@ -28,6 +28,7 @@ func init() {
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "attach",
 		Short: "Attaches monitoring to existing cron jobs.",
+		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			u, err := user.Current()
 			if err != nil {
