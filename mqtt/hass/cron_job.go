@@ -45,7 +45,7 @@ type CronJob struct {
 
 // NewCronJob creates a new cron job and publishes its config to homeassistant MQTT.
 func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
-	if err := validateTopicComponent(id); err != nil {
+	if err := ValidateTopicComponent(id); err != nil {
 		return nil, fmt.Errorf("provided cron job ID is invalid: %w", err)
 	}
 
@@ -55,7 +55,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 	}
 
 	nodeID := fmt.Sprintf("cron_job_%s_%s", d.user.Uid, d.id)
-	if err := validateTopicComponent(nodeID); err != nil {
+	if err := ValidateTopicComponent(nodeID); err != nil {
 		return nil, fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
 
@@ -93,7 +93,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 	return &c, nil
 }
 
-func validateTopicComponent(s string) error {
+func ValidateTopicComponent(s string) error {
 	if allowedTopicCharactersRegexp.FindString(s) != s {
 		return fmt.Errorf("%q cannot be used in a topic string. Topic strings can only contain %s", s, allowedTopicCharacters)
 	}
