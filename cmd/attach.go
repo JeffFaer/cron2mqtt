@@ -72,7 +72,7 @@ func attachTo(t cron.Tab) (updated bool) {
 
 		id := promptID()
 
-		j.PrefixCommand(fmt.Sprintf("%s exec %s ", exe, id))
+		j.PrefixCommand(fmt.Sprintf("%s exec %s", exe, id))
 		// TODO: Also update MQTT with the configuration of this cron job, even though it hasn't run yet.
 		updated = true
 	}
