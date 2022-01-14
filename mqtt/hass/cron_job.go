@@ -70,7 +70,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 			"name":        d.hostname,
 			"identifiers": []string{d.id},
 		},
-		"object_id":    id,
+		"object_id":    "cron_job_" + id,
 		"name":         fmt.Sprintf("[%s@%s] %s", d.user.Username, d.hostname, cmd),
 		"device_class": "problem",
 		"icon":         "mdi:robot",
