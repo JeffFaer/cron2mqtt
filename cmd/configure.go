@@ -25,7 +25,7 @@ func init() {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if setPassword {
-				fmt.Println("NOTE: Passwords are sent without any additional encryption. It's strongly recommended that you use ssl:// to that passwords don't show up as plaintext to everyone on your network.")
+				fmt.Println("NOTE: Passwords are sent without any additional encryption. It's strongly recommended that you use ssl:// so that passwords don't show up as plaintext to everyone on your network.")
 				fmt.Print("Enter password: ")
 				pwd, err := term.ReadPassword(int(syscall.Stdin))
 				if err != nil {
