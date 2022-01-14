@@ -61,7 +61,8 @@ func attachTo(t cron.Tab) (updated bool) {
 	for _, j := range t.Jobs() {
 		// TODO: Skip jobs that already have monitoring.
 		fmt.Println()
-		fmt.Printf("  %s\n", j.Command())
+		fmt.Println()
+		fmt.Printf("  $ %s\n", j.Command())
 		fmt.Println()
 		fmt.Printf("  Do you want to attach monitoring to this cron job? [yN] ")
 		var sel string
