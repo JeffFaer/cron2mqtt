@@ -24,6 +24,13 @@ const (
 	QoSExactlyOnce
 )
 
+type RetainMode bool
+
+const (
+	Retain      RetainMode = true
+	DoNotRetain RetainMode = false
+)
+
 // Client is an MQTT client.
 type Client struct {
 	c mqtt.Client
@@ -52,8 +59,8 @@ func NewClient(c Config) (*Client, error) {
 }
 
 // Publish publishes the given payload on the given topic on the connected broker.
-func (c *Client) Publish(topic string, qos QoS, retain bool, payload interface{}) error {
-	t := c.c.Publish(topic, byte(qos), retain, payload)
+func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload interface{}) error {
+	t := c.c.Publish(topic, byte(qos), bool(retain), payload)
 	t.Wait()
 	return t.Error()
 }

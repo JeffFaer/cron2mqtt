@@ -34,7 +34,7 @@ var (
 
 // Publisher publishes data to MQTT topics.
 type Publisher interface {
-	Publish(topic string, qos mqtt.QoS, retain bool, payload interface{}) error
+	Publish(topic string, qos mqtt.QoS, retain mqtt.RetainMode, payload interface{}) error
 }
 
 // CronJob provides methods to publish data about cron jobs to homeassistant MQTT.
@@ -86,7 +86,7 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 	}
 
 	c := CronJob{p, baseTopic}
-	if err := p.Publish(c.topic(configTopicSuffix), mqtt.QoSExactlyOnce, true, b); err != nil {
+	if err := p.Publish(c.topic(configTopicSuffix), mqtt.QoSExactlyOnce, mqtt.Retain, b); err != nil {
 		return nil, fmt.Errorf("could not publish discovery config: %w", err)
 	}
 
@@ -107,7 +107,7 @@ func (c *CronJob) topic(suffix string) string {
 
 // UnpublishConfig deletes this CronJob from homeassistant MQTT.
 func (c *CronJob) UnpublishConfig() error {
-	return c.p.Publish(c.topic(configTopicSuffix), mqtt.QoSExactlyOnce, true, "")
+	return c.p.Publish(c.topic(configTopicSuffix), mqtt.QoSExactlyOnce, mqtt.Retain, "")
 }
 
 // PublishResults publishes messages updating homeassistant MQTT about the invocation results.
@@ -131,11 +131,11 @@ func (c *CronJob) PublishResults(res exec.Result) error {
 		return fmt.Errorf("could not marshal attributes: %w", err)
 	}
 
-	if err := c.p.Publish(c.topic(stateTopicSuffix), mqtt.QoSExactlyOnce, false, state); err != nil {
+	if err := c.p.Publish(c.topic(stateTopicSuffix), mqtt.QoSExactlyOnce, mqtt.DoNotRetain, state); err != nil {
 		return fmt.Errorf("could not update state to %q: %w", state, err)
 	}
 
-	if err := c.p.Publish(c.topic(attributeTopicSuffix), mqtt.QoSExactlyOnce, false, b); err != nil {
+	if err := c.p.Publish(c.topic(attributeTopicSuffix), mqtt.QoSExactlyOnce, mqtt.DoNotRetain, b); err != nil {
 		return fmt.Errorf("could not update attributes to %q: %w", string(b), err)
 	}
 
