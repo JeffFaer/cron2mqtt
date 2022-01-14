@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	viper.SetConfigName("cron-mqtt")
+	viper.SetConfigName("cron2mqtt")
 	viper.SetConfigType("json")
 	viper.AddConfigPath("$HOME/.config")
 
