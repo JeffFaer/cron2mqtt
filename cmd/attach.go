@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
-	"os/user"
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
@@ -32,37 +31,45 @@ func init() {
 		Short: "Attaches monitoring to existing cron jobs.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			u, err := user.Current()
+			pcts, err := possibleCrontabs()
 			if err != nil {
-				return fmt.Errorf("could not determine current user")
+				return err
 			}
 
-			// TODO: Check for more crontabs than just the current user's.
-			attachUser(u)
+			var updates []func()
+			for _, pct := range pcts {
+				fmt.Printf("Checking %s\n", pct.name())
+				t, err := pct.load()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", pct.name(), err)
+					continue
+				}
+
+				if attachTo(t) {
+					pct := pct
+					updates = append(updates, func() {
+						fmt.Println()
+						fmt.Printf("Updating %s...\n", pct.name())
+						if dryRun {
+							fmt.Print(t)
+						} else {
+							if err := pct.update(t); err != nil {
+								fmt.Fprintf(os.Stderr, "Could not update %s: %s\n", pct.name(), err)
+							}
+						}
+					})
+				}
+			}
+
+			for _, u := range updates {
+				u()
+			}
+
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&dryRun, "dry_run", false, "Print the updated crontabs instead of actually updating them.")
 	rootCmd.AddCommand(cmd)
-}
-
-func attachUser(u *user.User) {
-	fmt.Printf("Checking crontab for %q\n", u.Username)
-	tab, err := cron.Load(u)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not load crontab for %q: %s\n", u.Username, err)
-	}
-
-	if attachTo(tab) {
-		if dryRun {
-			fmt.Print(tab)
-		} else {
-			if err := cron.Update(u, tab); err != nil {
-				fmt.Fprintf(os.Stderr, "Could not update crontab for %q: %s\n", u.Username, err)
-			}
-		}
-	}
-
 }
 
 func attachTo(t cron.Tab) (updated bool) {

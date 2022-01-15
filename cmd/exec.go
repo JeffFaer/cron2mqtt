@@ -17,17 +17,14 @@ func init() {
 		Short: "Executes a command, and publishes its results to MQTT.",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, configErr := loadConfig()
-			if configErr != nil {
-				fmt.Fprintln(os.Stderr, configErr)
-			}
-
 			id := args[0]
 			res := exec.Run(args[1], args[2:]...)
 
-			if configErr == nil {
+			if c, err := loadConfig(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			} else {
 				if err := publish(id, c, res); err != nil {
-					fmt.Fprintf(os.Stderr, "Ran into an issue publishing to MQTT: %s\n", err)
+					fmt.Fprintf(os.Stderr, "Could not publish to MQTT: %s\n", err)
 				}
 			}
 

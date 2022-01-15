@@ -4,18 +4,22 @@ import (
 	"reflect"
 )
 
-func minimize(m map[string]interface{}) {
-	minimizeAbbr(reflect.ValueOf(m), abbr)
+func abbreviateConfig(m map[string]interface{}) {
+	mapKeys(reflect.ValueOf(m), abbr, deviceAbbr)
 }
 
-func minimizeAbbr(m reflect.Value, abbr map[string]string) {
-	min := make(map[reflect.Value]string)
+func expandConfig(m map[string]interface{}) {
+	mapKeys(reflect.ValueOf(m), full, deviceFull)
+}
+
+func mapKeys(m reflect.Value, keys map[string]string, deviceKeys map[string]string) {
+	replace := make(map[reflect.Value]string)
 	itr := m.MapRange()
 	for itr.Next() {
 		k := itr.Key()
-		if l, ok := abbr[k.String()]; ok {
+		if l, ok := keys[k.String()]; ok {
 			if v := m.MapIndex(reflect.ValueOf(l)); v.Kind() == reflect.Invalid {
-				min[k] = l
+				replace[k] = l
 			}
 		}
 
@@ -23,20 +27,20 @@ func minimizeAbbr(m reflect.Value, abbr map[string]string) {
 			v := itr.Value().Interface()
 			t := reflect.TypeOf(v)
 			if t.Kind() == reflect.Map && t.Key().Kind() == reflect.String {
-				minimizeAbbr(reflect.ValueOf(v), deviceAbbr)
+				mapKeys(reflect.ValueOf(v), deviceKeys, deviceKeys)
 			}
 		}
 	}
 
-	for k, abbr := range min {
+	for k, l := range replace {
 		v := m.MapIndex(k)
 		m.SetMapIndex(k, reflect.Value{})
-		m.SetMapIndex(reflect.ValueOf(abbr), v)
+		m.SetMapIndex(reflect.ValueOf(l), v)
 	}
 }
 
 // https://www.home-assistant.io/docs/mqtt/discovery/
-var abbr = invert(map[string]string{
+var full = map[string]string{
 	"act_t":               "action_topic",
 	"act_tpl":             "action_template",
 	"atype":               "automation_type",
@@ -251,9 +255,10 @@ var abbr = invert(map[string]string{
 	"xy_cmd_t":            "xy_command_topic",
 	"xy_stat_t":           "xy_state_topic",
 	"xy_val_tpl":          "xy_value_template",
-})
+}
+var abbr = invert(full)
 
-var deviceAbbr = invert(map[string]string{
+var deviceFull = map[string]string{
 	"cu":   "configuration_url",
 	"cns":  "connections",
 	"ids":  "identifiers",
@@ -262,7 +267,8 @@ var deviceAbbr = invert(map[string]string{
 	"mdl":  "model",
 	"sw":   "sw_version",
 	"sa":   "suggested_area",
-})
+}
+var deviceAbbr = invert(deviceFull)
 
 func invert(m map[string]string) map[string]string {
 	res := make(map[string]string, len(m))

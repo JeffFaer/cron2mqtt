@@ -105,6 +105,10 @@ func (c *Command) Prefix(s string) error {
 	return nil
 }
 
+func (c *Command) Args() []string {
+	return c.args[1:]
+}
+
 // IsCron2Mqtt checks whether this command appears to execute cron2mqtt.
 func (c *Command) IsCron2Mqtt() bool {
 	return path.Base(c.args[0]) == "cron2mqtt"

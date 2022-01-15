@@ -1,8 +1,11 @@
 package mqtt
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
+	"sync"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -30,6 +33,8 @@ const (
 	Retain      RetainMode = true
 	DoNotRetain RetainMode = false
 )
+
+type Message = mqtt.Message
 
 // Client is an MQTT client.
 type Client struct {
@@ -63,6 +68,53 @@ func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload inter
 	t := c.c.Publish(topic, byte(qos), bool(retain), payload)
 	t.Wait()
 	return t.Error()
+}
+
+func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages chan<- Message) error {
+	ms := make(chan Message)
+	var closeOnce sync.Once
+
+	unsub := func(c mqtt.Client) error {
+		if t := c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
+			return t.Error()
+		}
+		closeOnce.Do(func() { close(ms) })
+		return nil
+	}
+
+	if t := c.c.Subscribe(topic, byte(qos), func(c mqtt.Client, m mqtt.Message) {
+		select {
+		case <-ctx.Done():
+			if err := unsub(c); err != nil {
+				log.Printf("Unable to unsubscribe from %q: %s", topic, err)
+			}
+		case ms <- m:
+		}
+	}); t.Wait() && t.Error() != nil {
+		close(messages)
+		close(ms)
+		return t.Error()
+	}
+
+	// Copy ms -> messages while respecting done
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(messages)
+				return
+			case m := <-ms:
+				select {
+				case <-ctx.Done():
+					close(messages)
+					return
+				case messages <- m:
+				}
+			}
+		}
+	}()
+
+	return nil
 }
 
 // Close disconnects this client from the broker.

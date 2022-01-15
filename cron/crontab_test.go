@@ -201,7 +201,7 @@ func TestPrefix(t *testing.T) {
 		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
 	}
 
-	if err := tab.Jobs()[1].PrefixCommand("cron2mqtt exec abcd"); err != nil {
+	if err := tab.Jobs()[1].Command.Prefix("cron2mqtt exec abcd"); err != nil {
 		t.Errorf("PrefixCommand(cron2mqtt exec abcd) has an error: %s", err)
 	}
 	var jobs []string
