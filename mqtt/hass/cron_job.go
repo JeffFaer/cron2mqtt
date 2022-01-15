@@ -271,7 +271,7 @@ func (c *CronJob) PublishResults(res exec.Result) error {
 		return fmt.Errorf("could not marshal attributes: %w", err)
 	}
 
-	if err := c.p.Publish(c.attributesTopic, mqtt.QoSExactlyOnce, mqtt.DoNotRetain, state); err != nil {
+	if err := c.p.Publish(c.stateTopic, mqtt.QoSExactlyOnce, mqtt.DoNotRetain, state); err != nil {
 		return fmt.Errorf("could not update state to %q: %w", state, err)
 	}
 
