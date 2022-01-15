@@ -110,7 +110,7 @@ func init() {
 
 func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*hass.CronJob, error) {
 	cjs := make(chan *hass.CronJob, 100)
-	if err := hass.DiscoverCronJobs(ctx, cl, cjs); err != nil {
+	if err := hass.DiscoverCronJobs(ctx, cl, chan<- *hass.CronJob(cjs)); err != nil {
 		return nil, err
 	}
 

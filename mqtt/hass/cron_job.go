@@ -190,7 +190,7 @@ func DiscoverCronJobs(ctx context.Context, s Subscriber, cjs chan<- *CronJob) er
 
 	t := fmt.Sprintf("%s/binary_sensor/%s/+/config", discoveryPrefix, nodeID)
 	ms := make(chan mqtt.Message, 100)
-	if err := s.Subscribe(ctx, t, mqtt.QoSExactlyOnce, ms); err != nil {
+	if err := s.Subscribe(ctx, t, mqtt.QoSExactlyOnce, chan<- mqtt.Message(ms)); err != nil {
 		close(cjs)
 		return fmt.Errorf("could not subscribe to MQTT: %w", err)
 	}
