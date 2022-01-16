@@ -133,9 +133,6 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 		return nil, err
 	}
 
-	// TODO: Should we be checking to see if the config already exists?
-	//       Does publishing the config again reset any of the entity's history?
-	//       What happens if we change the entity in the UI (e.g. change its icon), then publish the config again?
 	baseTopic := fmt.Sprintf("%s/binary_sensor/%s/%s", discoveryPrefix, nodeID, id)
 	conf := config{
 		BaseTopic:       baseTopic,
