@@ -9,8 +9,8 @@ import (
 
 type possibleCrontab interface {
 	name() string
-	load() (cron.Tab, error)
-	update(cron.Tab) error
+	load() (*cron.Tab, error)
+	update(*cron.Tab) error
 }
 
 type userCrontab struct {
@@ -20,10 +20,10 @@ type userCrontab struct {
 func (c userCrontab) name() string {
 	return fmt.Sprintf("crontab for %q", c.u.Username)
 }
-func (c userCrontab) load() (cron.Tab, error) {
+func (c userCrontab) load() (*cron.Tab, error) {
 	return cron.Load(c.u)
 }
-func (c userCrontab) update(t cron.Tab) error {
+func (c userCrontab) update(t *cron.Tab) error {
 	return cron.Update(c.u, t)
 }
 

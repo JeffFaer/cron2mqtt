@@ -14,18 +14,18 @@ import (
 	cron "github.com/robfig/cron/v3"
 )
 
-func Load(u *user.User) (Tab, error) {
+func Load(u *user.User) (*Tab, error) {
 	var stdout bytes.Buffer
 	cmd := exec.Command("crontab", "-u", u.Username, "-l")
 	cmd.Stdout = &stdout
 	if err := cmd.Run(); err != nil {
-		return Tab{}, fmt.Errorf("could not determine current user's crontab: %w", err)
+		return nil, fmt.Errorf("could not determine current user's crontab: %w", err)
 	}
 
 	return parse(string(stdout.Bytes()), false)
 }
 
-func Update(u *user.User, t Tab) error {
+func Update(u *user.User, t *Tab) error {
 	cmd := exec.Command("crontab", "-u", u.Username, "-")
 	cmd.Stdin = strings.NewReader(t.String())
 	if err := cmd.Run(); err != nil {
@@ -39,11 +39,11 @@ type Tab struct {
 	jobs    []*Job
 }
 
-func (t Tab) Jobs() []*Job {
+func (t *Tab) Jobs() []*Job {
 	return t.jobs
 }
 
-func (t Tab) String() string {
+func (t *Tab) String() string {
 	var s []string
 	for _, e := range t.entries {
 		s = append(s, e.String())
@@ -118,7 +118,7 @@ func (c *Command) String() string {
 	return c.orig
 }
 
-func parse(crontab string, includesUser bool) (Tab, error) {
+func parse(crontab string, includesUser bool) (*Tab, error) {
 	var t Tab
 	ls := strings.Split(crontab, "\n")
 	hasComments := false
@@ -147,7 +147,7 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 		seps, fs := fieldsN(l, n)
 
 		if len(fs) != n {
-			return Tab{}, fmt.Errorf("crontab has a badly formed line: %q", l)
+			return nil, fmt.Errorf("crontab has a badly formed line: %q", l)
 		}
 
 		var s strings.Builder
@@ -158,7 +158,7 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 		}
 		sched, err := cron.ParseStandard(s.String())
 		if err != nil {
-			return Tab{}, fmt.Errorf("crontab has a malformed schedule %q: %w", s.String(), err)
+			return nil, fmt.Errorf("crontab has a malformed schedule %q: %w", s.String(), err)
 		}
 
 		var j Job
@@ -174,7 +174,7 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 		}
 		args, err := shlex.Split(fs[i])
 		if err != nil {
-			return Tab{}, fmt.Errorf("crontab has a malformded command %q: %w", fs[i], err)
+			return nil, fmt.Errorf("crontab has a malformded command %q: %w", fs[i], err)
 		}
 		j.Command = &Command{
 			args: args,
@@ -189,7 +189,7 @@ func parse(crontab string, includesUser bool) (Tab, error) {
 		t.entries = append(t.entries, comment(comments.String()))
 	}
 
-	return t, nil
+	return &t, nil
 }
 
 func isComment(s string) bool {

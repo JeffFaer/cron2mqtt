@@ -72,7 +72,7 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func attachTo(t cron.Tab) (updated bool) {
+func attachTo(t *cron.Tab) (updated bool) {
 	for i, j := range t.Jobs() {
 		if j.Command.IsCron2Mqtt() {
 			fmt.Printf("  Skipping job #%d: It already appears to be monitored.\n", i+1)
