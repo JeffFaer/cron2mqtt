@@ -71,14 +71,13 @@ func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload inter
 }
 
 func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages chan<- Message) error {
-	ms := make(chan Message)
 	var closeOnce sync.Once
 
 	unsub := func(c mqtt.Client) error {
 		if t := c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
 			return t.Error()
 		}
-		closeOnce.Do(func() { close(ms) })
+		closeOnce.Do(func() { close(messages) })
 		return nil
 	}
 
@@ -88,31 +87,12 @@ func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages 
 			if err := unsub(c); err != nil {
 				log.Printf("Unable to unsubscribe from %q: %s", topic, err)
 			}
-		case ms <- m:
+		case messages <- m:
 		}
 	}); t.Wait() && t.Error() != nil {
 		close(messages)
-		close(ms)
 		return t.Error()
 	}
-
-	// Copy ms -> messages while respecting done
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				close(messages)
-				return
-			case m := <-ms:
-				select {
-				case <-ctx.Done():
-					close(messages)
-					return
-				case messages <- m:
-				}
-			}
-		}
-	}()
 
 	return nil
 }
