@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
-	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
 
 var (
@@ -108,7 +108,7 @@ func promptID() string {
 		fmt.Scanln(&sel)
 		if strings.TrimSpace(sel) != "" {
 			// TODO: Do we need to generalize this validation logic? We might want to support other MQTT destinations than hass.
-			if err := hass.ValidateTopicComponent(sel); err != nil {
+			if err := mqttcron.ValidateTopicComponent(sel); err != nil {
 				fmt.Fprintf(os.Stderr, "  ID %q is invalid: %s\n\n", sel, err)
 				continue
 			}

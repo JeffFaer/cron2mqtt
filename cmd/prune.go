@@ -44,8 +44,8 @@ func init() {
 			var remoteCronJobIDs []string
 			remoteCronJobByID := make(map[string]*hass.CronJob)
 			for _, cj := range remote {
-				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID)
-				remoteCronJobByID[cj.ID] = cj
+				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID())
+				remoteCronJobByID[cj.ID()] = cj
 			}
 			sort.Strings(remoteCronJobIDs)
 
@@ -93,15 +93,15 @@ func init() {
 				}
 
 				fmt.Println()
-				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID)
+				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID())
 				var sel string
 				fmt.Scanln(&sel)
 				if strings.ToLower(sel) != "y" {
 					continue
 				}
 
-				if err := cj.UnpublishConfig(); err != nil {
-					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID, err)
+				if err := cj.UnpublishConfig(cl); err != nil {
+					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID(), err)
 				}
 			}
 			return nil

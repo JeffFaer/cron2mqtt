@@ -51,7 +51,7 @@ func publish(id string, conf mqtt.Config, res exec.Result) error {
 		return fmt.Errorf("could not create hass.CronJob: %w", err)
 	}
 
-	if err := cj.PublishResults(res); err != nil {
+	if err := cj.PublishResults(c, res); err != nil {
 		return fmt.Errorf("problem publishing results to hass.CronJob: %w", err)
 	}
 

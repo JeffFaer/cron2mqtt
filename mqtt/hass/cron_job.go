@@ -2,21 +2,13 @@ package hass
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"os/user"
-	"regexp"
-	"strings"
-
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/denisbrodbeck/machineid"
 
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
 
 const (
@@ -27,36 +19,12 @@ const (
 	configTopicSuffix    = "config"
 	stateTopicSuffix     = "state"
 	attributeTopicSuffix = "attributes"
-
-	allowedTopicCharacters = "[a-zA-Z0-9_-]"
 )
-
-var (
-	allowedTopicCharactersRegexp = regexp.MustCompile(allowedTopicCharacters + "+")
-)
-
-// Publisher publishes data to MQTT topics.
-type Publisher interface {
-	Publish(topic string, qos mqtt.QoS, retain mqtt.RetainMode, payload interface{}) error
-}
-
-type Subscriber interface {
-	Publisher
-	Subscribe(ctx context.Context, topic string, qos mqtt.QoS, ms chan<- mqtt.Message) error
-}
-
-// CronJob provides methods to publish data about cron jobs to homeassistant MQTT.
-type CronJob struct {
-	p               Publisher
-	ID              string
-	configTopic     string
-	stateTopic      string
-	attributesTopic string
-}
 
 type config struct {
 	BaseTopic       string `json:"~"`
 	StateTopic      string `json:"state_topic"`
+	ValueTemplate   string `json:"value_template"`
 	AttributesTopic string `json:"json_attributes_topic"`
 
 	Device   deviceConfig `json:"device"`
@@ -69,21 +37,6 @@ type config struct {
 
 	PayloadOn  string `json:"payload_on"`
 	PayloadOff string `json:"payload_off"`
-}
-
-func (c config) stateTopic() string {
-	return c.resolve(c.StateTopic)
-}
-
-func (c config) attributesTopic() string {
-	return c.resolve(c.AttributesTopic)
-}
-
-func (c config) resolve(s string) string {
-	if strings.HasPrefix(s, "~/") {
-		return c.BaseTopic + "/" + s[2:]
-	}
-	return s
 }
 
 func (c config) MarshalJSON() ([]byte, error) {
@@ -119,33 +72,47 @@ type deviceConfig struct {
 	Identifiers []string `json:"identifiers"`
 }
 
+type Subscriber interface {
+	Subscribe(ctx context.Context, topic string, qos mqtt.QoS, ms chan<- mqtt.Message) error
+}
+
+// CronJob provides methods to publish data about cron jobs to homeassistant MQTT.
+type CronJob struct {
+	cj          *mqttcron.CronJob
+	configTopic string
+}
+
 // NewCronJob creates a new cron job and publishes its config to homeassistant MQTT.
-func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
-	if err := ValidateTopicComponent(id); err != nil {
+func NewCronJob(p mqttcron.Publisher, id string, cmd string) (*CronJob, error) {
+	cj, err := mqttcron.NewCronJob(id)
+	if err != nil {
+		return nil, err
+	}
+	if err := mqttcron.ValidateTopicComponent(id); err != nil {
 		return nil, fmt.Errorf("provided cron job ID is invalid: %w", err)
 	}
-	d, err := currentDevice()
+	d, err := mqttcron.CurrentDevice()
 	if err != nil {
 		return nil, err
 	}
-	nodeID, err := d.nodeID()
+	nodeID, err := nodeID(d)
 	if err != nil {
 		return nil, err
 	}
 
-	baseTopic := fmt.Sprintf("%s/binary_sensor/%s/%s", discoveryPrefix, nodeID, id)
 	conf := config{
-		BaseTopic:       baseTopic,
-		StateTopic:      "~/" + stateTopicSuffix,
-		AttributesTopic: "~/" + attributeTopicSuffix,
+		BaseTopic:       cj.Topic,
+		StateTopic:      "~",
+		ValueTemplate:   fmt.Sprintf("{%% if value_json.%s == 0 %%}%s{%% else %%}%s{%% endif %%}", mqttcron.ExitCodeAttributeName, successState, failureState),
+		AttributesTopic: "~",
 
 		Device: deviceConfig{
-			Name:        d.hostname,
-			Identifiers: []string{d.id},
+			Name:        d.Hostname,
+			Identifiers: []string{d.ID},
 		},
 		UniqueID: id,
 		ObjectID: "cron_job_" + id,
-		Name:     fmt.Sprintf("[%s@%s] %s", d.user.Username, d.hostname, cmd),
+		Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, cmd),
 
 		DeviceClass: "problem",
 		Icon:        "mdi:robot",
@@ -160,11 +127,8 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 	}
 
 	c := CronJob{
-		p:               p,
-		ID:              id,
-		configTopic:     conf.resolve("~/" + configTopicSuffix),
-		stateTopic:      conf.stateTopic(),
-		attributesTopic: conf.attributesTopic(),
+		cj:          cj,
+		configTopic: fmt.Sprintf("%s/binary_sensor/%s/%s/config", discoveryPrefix, nodeID, id),
 	}
 	if err := p.Publish(c.configTopic, mqtt.QoSExactlyOnce, mqtt.Retain, b); err != nil {
 		return nil, fmt.Errorf("could not publish discovery config: %w", err)
@@ -174,12 +138,12 @@ func NewCronJob(p Publisher, id string, cmd string) (*CronJob, error) {
 }
 
 func DiscoverCronJobs(ctx context.Context, s Subscriber, cjs chan<- *CronJob) error {
-	d, err := currentDevice()
+	d, err := mqttcron.CurrentDevice()
 	if err != nil {
 		close(cjs)
 		return err
 	}
-	nodeID, err := d.nodeID()
+	nodeID, err := nodeID(d)
 	if err != nil {
 		close(cjs)
 		return err
@@ -224,93 +188,34 @@ func cronJobFromConfigMessage(s Subscriber, m mqtt.Message) (*CronJob, error) {
 	if err := json.Unmarshal(m.Payload(), &c); err != nil {
 		return nil, fmt.Errorf("%s has invalid config: %w", m.Topic(), err)
 	}
+	cj, err := mqttcron.NewCronJob(c.UniqueID)
+	if err != nil {
+		return nil, err
+	}
+	cj.Topic = c.BaseTopic
 	return &CronJob{
-		p:               s,
-		ID:              c.UniqueID,
-		configTopic:     m.Topic(),
-		stateTopic:      c.stateTopic(),
-		attributesTopic: c.attributesTopic(),
+		cj:          cj,
+		configTopic: m.Topic(),
 	}, nil
 }
 
-func ValidateTopicComponent(s string) error {
-	if allowedTopicCharactersRegexp.FindString(s) != s {
-		return fmt.Errorf("%q cannot be used in a topic string. Topic strings can only contain %s", s, allowedTopicCharacters)
-	}
-
-	return nil
+func (c *CronJob) ID() string {
+	return c.cj.ID
 }
 
 // UnpublishConfig deletes this CronJob from homeassistant MQTT.
-func (c *CronJob) UnpublishConfig() error {
-	return c.p.Publish(c.configTopic, mqtt.QoSExactlyOnce, mqtt.Retain, "")
+func (c *CronJob) UnpublishConfig(p mqttcron.Publisher) error {
+	return p.Publish(c.configTopic, mqtt.QoSExactlyOnce, mqtt.Retain, "")
 }
 
 // PublishResults publishes messages updating homeassistant MQTT about the invocation results.
-func (c *CronJob) PublishResults(res exec.Result) error {
-	state := successState
-	if res.ExitCode != 0 {
-		state = failureState
-	}
-	attr := map[string]interface{}{
-		"args":        res.Args,
-		"start_time":  res.Start,
-		"end_time":    res.End,
-		"duration_ms": res.End.Sub(res.Start).Milliseconds(),
-		"stdout":      string(res.Stdout),
-		"stderr":      string(res.Stderr),
-		"exit_code":   res.ExitCode,
-		// TODO: Include an attribute for the estimated next execution time, if we can find the schedule for this cron job.
-	}
-	b, err := json.Marshal(attr)
-	if err != nil {
-		return fmt.Errorf("could not marshal attributes: %w", err)
-	}
-
-	if err := c.p.Publish(c.stateTopic, mqtt.QoSExactlyOnce, mqtt.DoNotRetain, state); err != nil {
-		return fmt.Errorf("could not update state to %q: %w", state, err)
-	}
-
-	if err := c.p.Publish(c.attributesTopic, mqtt.QoSExactlyOnce, mqtt.DoNotRetain, b); err != nil {
-		return fmt.Errorf("could not update attributes to %q: %w", string(b), err)
-	}
-
-	return nil
+func (c *CronJob) PublishResults(p mqttcron.Publisher, res exec.Result) error {
+	return c.cj.PublishResults(p, res)
 }
 
-type device struct {
-	id       string
-	user     *user.User
-	hostname string
-}
-
-func currentDevice() (device, error) {
-	id, err := machineid.ID()
-	if err != nil {
-		return device{}, fmt.Errorf("could not determine machineid: %w", err)
-	}
-	u, err := user.Current()
-	if err != nil {
-		return device{}, fmt.Errorf("could not determine current user: %w", err)
-	}
-	h, err := os.Hostname()
-	if err != nil {
-		return device{}, fmt.Errorf("could not determine hostname: %w", err)
-	}
-
-	return device{protect(id), u, h}, nil
-}
-
-func protect(id string) string {
-	mac := hmac.New(md5.New, []byte(id))
-	mac.Write([]byte("cron2mqtt"))
-	b := mac.Sum(nil)
-	return base58.Encode(b)
-}
-
-func (d device) nodeID() (string, error) {
-	id := fmt.Sprintf("cron2mqtt_%s_%s", d.id, d.user.Uid)
-	if err := ValidateTopicComponent(id); err != nil {
+func nodeID(d mqttcron.Device) (string, error) {
+	id := fmt.Sprintf("cron2mqtt_%s_%s", d.ID, d.User.Uid)
+	if err := mqttcron.ValidateTopicComponent(id); err != nil {
 		return "", fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
 	return id, nil
