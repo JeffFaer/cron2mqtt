@@ -46,7 +46,7 @@ func publish(id string, conf mqtt.Config, res exec.Result) error {
 	}
 	defer c.Close(250)
 
-	cj, err := hass.NewCronJob(c, id, res.Cmd)
+	cj, err := hass.NewCronJob(c, id, res.Args[0])
 	if err != nil {
 		return fmt.Errorf("could not create hass.CronJob: %w", err)
 	}

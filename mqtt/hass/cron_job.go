@@ -253,7 +253,6 @@ func (c *CronJob) PublishResults(res exec.Result) error {
 		state = failureState
 	}
 	attr := map[string]interface{}{
-		"cmd":         res.Cmd,
 		"args":        res.Args,
 		"start_time":  res.Start,
 		"end_time":    res.End,

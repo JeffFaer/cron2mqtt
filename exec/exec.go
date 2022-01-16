@@ -14,7 +14,6 @@ var (
 
 // Result is the result of executing a command.
 type Result struct {
-	Cmd  string
 	Args []string
 
 	Start, End     time.Time
@@ -35,8 +34,7 @@ func Run(name string, args ...string) Result {
 	c.Stderr = io.MultiWriter(os.Stderr, &stderr)
 
 	var res Result
-	res.Cmd = name
-	res.Args = args
+	res.Args = append([]string{name}, args...)
 
 	res.Start = now()
 	err := c.Run()

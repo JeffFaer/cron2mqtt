@@ -72,7 +72,10 @@ func init() {
 						continue
 					}
 
-					for _, arg := range j.Command.Args() {
+					// Check to see if any of the cron job's arguments are one of the remote cron job IDs.
+					// The cron job's command will be at a minimum "cron2mqtt exec ID ...", so only start looking at the third element.
+					// Technically we're looking at more arugments than necessary, but it seems unlikely we'd have a false positive.
+					for _, arg := range j.Command.Args()[2:] {
 						if _, ok := remoteCronJobByID[arg]; ok {
 							fmt.Println()
 							fmt.Printf("  Discovered cron job %s locally:\n", arg)
