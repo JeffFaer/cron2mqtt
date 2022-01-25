@@ -20,6 +20,13 @@ func init() {
 			id := args[0]
 			res := exec.Run(args[1], args[2:]...)
 
+			if res.Err != nil {
+				fmt.Fprintln(os.Stderr, res.Err)
+				if len(res.Stderr) == 0 {
+					res.Stderr = []byte(res.Err.Error())
+				}
+			}
+
 			if c, err := loadConfig(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			} else {
@@ -29,9 +36,6 @@ func init() {
 			}
 
 			if res.ExitCode != 0 {
-				if res.Err != nil {
-					fmt.Fprintln(os.Stderr, res.Err)
-				}
 				os.Exit(res.ExitCode)
 			}
 			return nil
