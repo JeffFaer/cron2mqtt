@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"syscall"
@@ -85,10 +86,27 @@ func init() {
 
 func promptPassword() ([]byte, error) {
 	fmt.Println("NOTE: Passwords are sent without any additional encryption. It's strongly recommended that you use ssl:// so that passwords don't show up as plaintext to everyone on your network.")
-	fmt.Print("Enter password: ")
-	pwd, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
-	return pwd, err
+	for {
+		fmt.Print("Enter password: ")
+		pwd, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Print("Confirm password: ")
+		pwd2, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return nil, err
+		}
+
+		if bytes.Equal(pwd, pwd2) {
+			return pwd, nil
+		}
+
+		fmt.Println("Passwords did not match. Try again.")
+	}
 }
 
 func loadConfig() (mqtt.Config, error) {
