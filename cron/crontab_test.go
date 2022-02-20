@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/kballard/go-shellquote"
 )
 
 func TestFieldsN(t *testing.T) {
@@ -211,5 +212,43 @@ func TestPrefix(t *testing.T) {
 
 	if diff := cmp.Diff([]string{cmd1, "* * * * * bar cron2mqtt exec abcd echo 4 5 6"}, jobs); diff != "" {
 		t.Errorf("jobs diff (-want +got):\n%s", diff)
+	}
+}
+
+func TestCommandQuote(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cmd  string
+	}{
+		{
+			name: "simple",
+			cmd:  "echo true",
+		},
+		{
+			name: "with double quotes",
+			cmd:  `echo "foo bar"`,
+		},
+		{
+			name: "with single quotes",
+			cmd:  `echo 'foo bar'`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd, err := ParseCommand(tc.cmd)
+			if err != nil {
+				t.Fatalf("ParseCommand(%q) = %s", tc.cmd, err)
+			}
+
+			cmd.Quote()
+
+			sp, err := shellquote.Split(cmd.String())
+			if err != nil {
+				t.Fatalf("shellquote.Split(%q) = %s", cmd.String(), err)
+			}
+
+			if len(sp) != 1 || sp[0] != tc.cmd {
+				t.Fatalf("shellquote.Split(%q) = %#v, wanted %q", cmd.String(), sp, tc.cmd)
+			}
+		})
 	}
 }

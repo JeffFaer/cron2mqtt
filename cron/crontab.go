@@ -10,7 +10,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/google/shlex"
+	"github.com/kballard/go-shellquote"
 	cron "github.com/robfig/cron/v3"
 )
 
@@ -94,9 +94,28 @@ type Command struct {
 	orig string
 }
 
-// Prefix appends s as a prefix to this Command.
+func ParseCommand(orig string) (*Command, error) {
+	args, err := shellquote.Split(orig)
+	if err != nil {
+		return nil, fmt.Errorf("command %q is malformed: %w", orig, err)
+	}
+	return &Command{
+		args: args,
+		orig: orig,
+	}, nil
+}
+
+// Quote this Command so that it will be a literal argument to a shell.
+// This will make the command unexecutable, unless it is Prefixed with another command.
+func (c *Command) Quote() {
+	quoted := shellquote.Join(c.orig)
+	c.args = []string{quoted}
+	c.orig = quoted
+}
+
+// Prefix prepends s as a prefix to this Command.
 func (c *Command) Prefix(s string) error {
-	args, err := shlex.Split(s)
+	args, err := shellquote.Split(s)
 	if err != nil {
 		return fmt.Errorf("prefix %q is invalid: %w", s, err)
 	}
@@ -172,14 +191,11 @@ func parse(crontab string, includesUser bool) (*Tab, error) {
 			i++
 			j.sep2 = seps[i]
 		}
-		args, err := shlex.Split(fs[i])
+		cmd, err := ParseCommand(fs[i])
 		if err != nil {
-			return nil, fmt.Errorf("crontab has a malformded command %q: %w", fs[i], err)
+			return nil, err
 		}
-		j.Command = &Command{
-			args: args,
-			orig: fs[i],
-		}
+		j.Command = cmd
 
 		t.entries = append(t.entries, &j)
 		t.jobs = append(t.jobs, &j)

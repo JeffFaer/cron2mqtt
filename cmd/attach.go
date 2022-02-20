@@ -11,6 +11,7 @@ import (
 
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
+	"github.com/kballard/go-shellquote"
 )
 
 var (
@@ -92,12 +93,23 @@ func attachTo(t *cron.Tab) (updated bool) {
 
 		id := promptID()
 
-		j.Command.Prefix(fmt.Sprintf("%s exec %s", exe, id))
+		updateCommand(id, j.Command)
 		// TODO: Also update MQTT with the configuration of this cron job, even though it hasn't run yet.
 		updated = true
 	}
 
 	return
+}
+
+func updateCommand(id string, cmd *cron.Command) {
+	for _, arg := range cmd.Args() {
+		if shellquote.Join(arg) != arg {
+			cmd.Quote()
+			break
+		}
+	}
+
+	cmd.Prefix(fmt.Sprintf("%s exec %s", exe, id))
 }
 
 func promptID() string {

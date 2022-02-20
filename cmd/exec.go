@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -18,7 +19,7 @@ func init() {
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
-			res := exec.Run(args[1], args[2:]...)
+			res := run(args[1:])
 
 			if res.Err != nil {
 				fmt.Fprintln(os.Stderr, res.Err)
@@ -41,6 +42,11 @@ func init() {
 			return nil
 		},
 	})
+}
+
+func run(args []string) exec.Result {
+	sh := os.Getenv("SHELL")
+	return exec.Run(sh, "-c", strings.Join(args, " "))
 }
 
 func publish(id string, conf mqtt.Config, res exec.Result) error {

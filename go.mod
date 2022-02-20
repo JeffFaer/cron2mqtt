@@ -7,7 +7,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.3.5
 	github.com/google/go-cmp v0.5.6
-	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/viper v1.10.0
