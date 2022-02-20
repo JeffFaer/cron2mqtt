@@ -54,16 +54,16 @@ func init() {
 				fmt.Printf("  %s\n", id)
 			}
 
-			pcts, err := possibleCrontabs()
+			cts, err := crontabs()
 			if err != nil {
 				return err
 			}
-			for _, pct := range pcts {
+			for _, ct := range cts {
 				fmt.Println()
-				fmt.Printf("Checking %s...\n", pct.name())
-				t, err := pct.load()
+				fmt.Printf("Checking %s...\n", ct.name())
+				t, err := ct.Load()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", pct.name(), err)
+					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", ct.name(), err)
 					continue
 				}
 
@@ -73,14 +73,19 @@ func init() {
 					}
 
 					// Check to see if any of the cron job's arguments are one of the remote cron job IDs.
+					args, ok := j.Command.Args()
+					if !ok {
+						continue
+					}
 					// The cron job's command will be at a minimum "cron2mqtt exec ID ...", so only start looking at the third element.
 					// Technically we're looking at more arugments than necessary, but it seems unlikely we'd have a false positive.
-					for _, arg := range j.Command.Args()[2:] {
+					for _, arg := range args[2:] {
 						if _, ok := remoteCronJobByID[arg]; ok {
 							fmt.Println()
 							fmt.Printf("  Discovered cron job %s locally:\n", arg)
 							fmt.Printf("  $ %s\n", j.Command)
 							delete(remoteCronJobByID, arg)
+							break
 						}
 					}
 				}

@@ -41,10 +41,7 @@ func TestUpdateCommand(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := cron.ParseCommand(tc.cmd)
-			if err != nil {
-				t.Fatalf("cron.ParseCommand(%q) = %s", tc.cmd, err)
-			}
+			cmd := cron.NewCommand(tc.cmd)
 
 			updateCommand("id", cmd)
 

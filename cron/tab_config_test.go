@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/kballard/go-shellquote"
 )
 
 func TestFieldsN(t *testing.T) {
@@ -105,7 +104,7 @@ func TestFieldsN(t *testing.T) {
 	}
 }
 
-func TestCrontabRoundtrip(t *testing.T) {
+func TestTabConfigRoundtrip(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
 		includesUsers bool
@@ -167,7 +166,7 @@ func TestCrontabRoundtrip(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tab, err := parse(tc.s, tc.includesUsers); err != nil {
+			if tab, err := parseTabConfig(tc.s, tc.includesUsers); err != nil {
 				t.Errorf("parse(tc.s) generated an error: %s", err)
 			} else if diff := cmp.Diff(strings.Split(tc.s, "\n"), strings.Split(tab.String(), "\n")); diff != "" {
 				t.Errorf("parse(tc.s) does not roundtrip (-want +got):\n%s", diff)
@@ -176,10 +175,10 @@ func TestCrontabRoundtrip(t *testing.T) {
 	}
 }
 
-func TestParse(t *testing.T) {
+func TestParseTabConfig(t *testing.T) {
 	cmd1 := "* * * * * foo echo 1 2 3"
 	cmd2 := "* * * * * bar echo 4 5 6"
-	tab, err := parse(cmd1+"\n"+cmd2, true)
+	tab, err := parseTabConfig(cmd1+"\n"+cmd2, true)
 	if err != nil {
 		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
 	}
@@ -194,17 +193,16 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestPrefix(t *testing.T) {
+func TestTransform(t *testing.T) {
 	cmd1 := "* * * * * foo echo 1 2 3"
 	cmd2 := "* * * * * bar echo 4 5 6"
-	tab, err := parse(cmd1+"\n"+cmd2, true)
+	tab, err := parseTabConfig(cmd1+"\n"+cmd2, true)
 	if err != nil {
 		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
 	}
 
-	if err := tab.Jobs()[1].Command.Prefix("cron2mqtt exec abcd"); err != nil {
-		t.Errorf("PrefixCommand(cron2mqtt exec abcd) has an error: %s", err)
-	}
+	tab.Jobs()[1].Command.Transform(func(cmd string) string { return "cron2mqtt exec abcd " + cmd })
+
 	var jobs []string
 	for _, j := range tab.Jobs() {
 		jobs = append(jobs, j.String())
@@ -212,43 +210,5 @@ func TestPrefix(t *testing.T) {
 
 	if diff := cmp.Diff([]string{cmd1, "* * * * * bar cron2mqtt exec abcd echo 4 5 6"}, jobs); diff != "" {
 		t.Errorf("jobs diff (-want +got):\n%s", diff)
-	}
-}
-
-func TestCommandQuote(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		cmd  string
-	}{
-		{
-			name: "simple",
-			cmd:  "echo true",
-		},
-		{
-			name: "with double quotes",
-			cmd:  `echo "foo bar"`,
-		},
-		{
-			name: "with single quotes",
-			cmd:  `echo 'foo bar'`,
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cmd, err := ParseCommand(tc.cmd)
-			if err != nil {
-				t.Fatalf("ParseCommand(%q) = %s", tc.cmd, err)
-			}
-
-			cmd.Quote()
-
-			sp, err := shellquote.Split(cmd.String())
-			if err != nil {
-				t.Fatalf("shellquote.Split(%q) = %s", cmd.String(), err)
-			}
-
-			if len(sp) != 1 || sp[0] != tc.cmd {
-				t.Fatalf("shellquote.Split(%q) = %#v, wanted %q", cmd.String(), sp, tc.cmd)
-			}
-		})
 	}
 }

@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/kballard/go-shellquote"
 	"github.com/spf13/cobra"
 
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
-	"github.com/kballard/go-shellquote"
 )
 
 var (
@@ -32,30 +32,30 @@ func init() {
 		Short: "Attaches monitoring to existing cron jobs.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			pcts, err := possibleCrontabs()
+			cts, err := crontabs()
 			if err != nil {
 				return err
 			}
 
 			var updates []func()
-			for _, pct := range pcts {
-				fmt.Printf("Checking %s\n", pct.name())
-				t, err := pct.load()
+			for _, ct := range cts {
+				fmt.Printf("Checking %s\n", ct.name())
+				tc, err := ct.Load()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", pct.name(), err)
+					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", ct.name(), err)
 					continue
 				}
 
-				if attachTo(t) {
-					pct := pct
+				if attachTo(tc) {
+					ct := ct
 					updates = append(updates, func() {
 						fmt.Println()
-						fmt.Printf("Updating %s...\n", pct.name())
+						fmt.Printf("Updating %s...\n", ct.name())
 						if dryRun {
-							fmt.Print(t)
+							fmt.Print(ct)
 						} else {
-							if err := pct.update(t); err != nil {
-								fmt.Fprintf(os.Stderr, "Could not update %s: %s\n", pct.name(), err)
+							if err := ct.Update(tc); err != nil {
+								fmt.Fprintf(os.Stderr, "Could not update %s: %s\n", ct.name(), err)
 							}
 						}
 					})
@@ -73,8 +73,8 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func attachTo(t *cron.Tab) (updated bool) {
-	for i, j := range t.Jobs() {
+func attachTo(c *cron.TabConfig) (updated bool) {
+	for i, j := range c.Jobs() {
 		if j.Command.IsCron2Mqtt() {
 			fmt.Printf("  Skipping job #%d: It already appears to be monitored.\n", i+1)
 			continue
@@ -102,14 +102,24 @@ func attachTo(t *cron.Tab) (updated bool) {
 }
 
 func updateCommand(id string, cmd *cron.Command) {
-	for _, arg := range cmd.Args() {
+	pre := fmt.Sprintf("%s exec %s", exe, id)
+
+	// Do we need to quote the entire pre-existing command?
+	args, ok := cmd.Args()
+	quote := !ok
+	for _, arg := range args {
 		if shellquote.Join(arg) != arg {
-			cmd.Quote()
+			quote = true
 			break
 		}
 	}
 
-	cmd.Prefix(fmt.Sprintf("%s exec %s", exe, id))
+	cmd.Transform(func(cmd string) string {
+		if quote {
+			cmd = shellquote.Join(cmd)
+		}
+		return pre + " " + cmd
+	})
 }
 
 func promptID() string {
