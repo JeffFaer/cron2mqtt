@@ -12,6 +12,7 @@ import (
 	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
 
 func init() {
@@ -61,13 +62,14 @@ func publish(id string, conf mqtt.Config, args []string, res exec.Result) error 
 	}
 	defer c.Close(250)
 
-	cj, err := hass.NewCronJob(c, id, args[0])
+	// TODO: Make the plugins configurable.
+	cj, err := mqttcron.NewCronJob(id, c, &hass.Plugin{})
 	if err != nil {
-		return fmt.Errorf("could not create hass.CronJob: %w", err)
+		return fmt.Errorf("could not create mqttcron.CronJob: %w", err)
 	}
 
-	if err := cj.PublishResults(c, res); err != nil {
-		return fmt.Errorf("problem publishing results to hass.CronJob: %w", err)
+	if err := cj.PublishResult(res); err != nil {
+		return fmt.Errorf("problem publishing results to mqttcron.CronJob: %w", err)
 	}
 
 	return nil

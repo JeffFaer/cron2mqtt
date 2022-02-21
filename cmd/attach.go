@@ -133,7 +133,6 @@ func promptID() string {
 		var sel string
 		fmt.Scanln(&sel)
 		if strings.TrimSpace(sel) != "" {
-			// TODO: Do we need to generalize this validation logic? We might want to support other MQTT destinations than hass.
 			if err := mqttcron.ValidateTopicComponent(sel); err != nil {
 				fmt.Fprintf(os.Stderr, "  ID %q is invalid: %s\n\n", sel, err)
 				continue

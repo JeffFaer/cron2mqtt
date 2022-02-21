@@ -40,6 +40,16 @@ const (
 	DoNotRetain RetainMode = false
 )
 
+func (m RetainMode) String() string {
+	switch m {
+	case Retain:
+		return "Retain"
+	case DoNotRetain:
+		return "DoNotRetain"
+	}
+	panic(fmt.Errorf("unknown RetainMode: %t", m))
+}
+
 type Message = mqtt.Message
 
 // Client is an MQTT client.
@@ -97,7 +107,7 @@ func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload inter
 			}
 		}
 	}(payloadHook)
-	defer logutil.StartTimerLogger(log.With().Str("topic", topic).Logger().Hook(payloadHook), zerolog.DebugLevel, "Publishing message to MQTT topic").Stop()
+	defer logutil.StartTimerLogger(log.With().Str("topic", topic).Bool("retained", bool(retain)).Logger().Hook(payloadHook), zerolog.DebugLevel, "Publishing message to MQTT topic").Stop()
 	t := c.c.Publish(topic, byte(qos), bool(retain), payload)
 	t.Wait()
 	return t.Error()
@@ -131,11 +141,16 @@ func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages 
 		log := log.Debug().
 			Int32("n", i).
 			Uint16("id", m.MessageID()).
-			Str("topic", topic).
+			Bool("retained", m.Retained()).
+			Func(func(e *zerolog.Event) {
+				if m.Topic() != topic {
+					e.Str("message_topic", m.Topic())
+				}
+			}).
 			Func(func(e *zerolog.Event) {
 				if log.GetLevel() <= zerolog.TraceLevel {
 					if p := m.Payload(); json.Valid(p) {
-						e.RawJSON("payload", m.Payload())
+						e.RawJSON("payload", p)
 					} else {
 						e.Str("payload", fmt.Sprintf("%s", string(p)))
 					}

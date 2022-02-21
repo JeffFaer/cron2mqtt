@@ -15,6 +15,7 @@ import (
 	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
+	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
 
 func init() {
@@ -34,9 +35,8 @@ func init() {
 				return fmt.Errorf("could not initialize MQTT: %w", err)
 			}
 			defer cl.Close(250)
-			ctx, canc := context.WithTimeout(context.Background(), timeout)
-			defer canc()
-			remote, err := discoverRemoteCronJobs(ctx, cl)
+			ctx := context.Background()
+			remote, err := discoverRemoteCronJobs(ctx, cl, timeout)
 			if err != nil {
 				return err
 			}
@@ -45,10 +45,10 @@ func init() {
 				return nil
 			}
 			var remoteCronJobIDs []string
-			remoteCronJobByID := make(map[string]*hass.CronJob)
+			remoteCronJobByID := make(map[string]*mqttcron.CronJob)
 			for _, cj := range remote {
-				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID())
-				remoteCronJobByID[cj.ID()] = cj
+				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID)
+				remoteCronJobByID[cj.ID] = cj
 			}
 			sort.Strings(remoteCronJobIDs)
 
@@ -101,7 +101,7 @@ func init() {
 				}
 
 				fmt.Println()
-				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID())
+				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID)
 				var sel string
 				fmt.Scanln(&sel)
 				if strings.ToLower(sel) != "y" {
@@ -109,8 +109,8 @@ func init() {
 				}
 
 				t := logutil.StartTimerLogger(log.With().Str("id", id).Logger(), zerolog.InfoLevel, "Pruning")
-				if err := cj.UnpublishConfig(cl); err != nil {
-					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID(), err)
+				if err := cj.Unpublish(ctx); err != nil {
+					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID, err)
 				}
 				t.Stop()
 			}
@@ -121,15 +121,18 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*hass.CronJob, error) {
+func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client, timeout time.Duration) ([]*mqttcron.CronJob, error) {
 	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering cron jobs").Stop()
 
-	cjs := make(chan *hass.CronJob, 100)
-	if err := hass.DiscoverCronJobs(ctx, cl, chan<- *hass.CronJob(cjs)); err != nil {
+	ctx, canc := context.WithTimeout(context.Background(), timeout)
+	defer canc()
+
+	cjs := make(chan *mqttcron.CronJob, 100)
+	if err := mqttcron.DiscoverCronJobs(ctx, cl, chan<- *mqttcron.CronJob(cjs), func() mqttcron.Plugin { return &hass.Plugin{} }); err != nil {
 		return nil, err
 	}
 
-	var res []*hass.CronJob
+	var res []*mqttcron.CronJob
 	func() {
 		for {
 			select {
