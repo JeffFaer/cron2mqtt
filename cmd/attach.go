@@ -32,6 +32,10 @@ func init() {
 		Short: "Attaches monitoring to existing cron jobs.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if dryRun {
+				fmt.Println("### THIS IS A DRY RUN ###")
+			}
+
 			cts, err := crontabs()
 			if err != nil {
 				return err

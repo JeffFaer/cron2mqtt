@@ -3,11 +3,17 @@ package mqtt
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 )
 
 // Config configures how a Client connects to an MQTT broker.
@@ -43,6 +49,8 @@ type Client struct {
 
 // NewClient constructs a new MQTT client and connects it to the broker.
 func NewClient(c Config) (*Client, error) {
+	defer logutil.StartTimerLogger(log.With().Str("broker", c.Broker).Logger(), zerolog.DebugLevel, "Connecting to MQTT broker").Stop()
+
 	opts := mqtt.NewClientOptions().
 		SetClientID("cron-mqtt").
 		SetOrderMatters(false).
@@ -65,39 +73,100 @@ func NewClient(c Config) (*Client, error) {
 
 // Publish publishes the given payload on the given topic on the connected broker.
 func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload interface{}) error {
+	payloadHook := func(e *zerolog.Event) {
+		if log.Logger.GetLevel() <= zerolog.TraceLevel {
+			var b []byte
+			switch p := payload.(type) {
+			case string:
+				b = []byte(p)
+			case []byte:
+				b = []byte(p)
+			default:
+				b = []byte(fmt.Sprintf("%s", p))
+			}
+
+			if json.Valid(b) {
+				e.RawJSON("payload", b)
+			} else {
+				e.Str("payload", string(b))
+			}
+		}
+	}
+	defer logutil.StartTimerLogger(log.With().Str("topic", topic).Logger().Hook(hook(payloadHook)), zerolog.DebugLevel, "Publishing message to MQTT topic").Stop()
 	t := c.c.Publish(topic, byte(qos), bool(retain), payload)
 	t.Wait()
 	return t.Error()
 }
 
 func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages chan<- Message) error {
-	var closeOnce sync.Once
+	start := zerolog.TimestampFunc()
+	log := log.Ctx(ctx).Hook(hook(func(e *zerolog.Event) { e.TimeDiff("offset", zerolog.TimestampFunc(), start) })).With().Str("topic", topic).Logger()
+	log.Debug().Msg("Subscribing to MQTT topic")
 
-	unsub := func(c mqtt.Client) error {
-		if t := c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
+	var closeOnce sync.Once
+	unsub := func() error {
+		log.Debug().Msg("Unsubscribing from MQTT topic")
+		if t := c.c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
 			return t.Error()
 		}
 		closeOnce.Do(func() { close(messages) })
+		log.Debug().Msg("Unsubscribed from MQTT topic")
 		return nil
 	}
 
+	var i int32
 	if t := c.c.Subscribe(topic, byte(qos), func(c mqtt.Client, m mqtt.Message) {
+		i := atomic.AddInt32(&i, 1)
+		log := log.Debug().
+			Int32("n", i).
+			Uint16("id", m.MessageID()).
+			Str("topic", topic).
+			Func(func(e *zerolog.Event) {
+				if log.GetLevel() <= zerolog.TraceLevel {
+					if p := m.Payload(); json.Valid(p) {
+						e.RawJSON("payload", m.Payload())
+					} else {
+						e.Str("payload", fmt.Sprintf("%s", string(p)))
+					}
+				}
+			})
 		select {
 		case <-ctx.Done():
-			if err := unsub(c); err != nil {
-				log.Printf("Unable to unsubscribe from %q: %s", topic, err)
-			}
+			log.Msg("Dropping message")
 		case messages <- m:
+			log.Msg("Received message")
 		}
 	}); t.Wait() && t.Error() != nil {
 		close(messages)
 		return t.Error()
 	}
 
+	go func() {
+		<-ctx.Done()
+		t := time.NewTicker(200 * time.Millisecond)
+		defer t.Stop()
+		for ; true; <-t.C {
+			if err := unsub(); err != nil {
+				log.Warn().Err(err).Msg("Unable to unsubscribe from MQTT topic")
+				continue
+			}
+
+			break
+		}
+	}()
+
 	return nil
 }
 
 // Close disconnects this client from the broker.
 func (c *Client) Close(quiesce uint) {
+	opts := c.c.OptionsReader()
+	defer logutil.StartTimerLogger(log.With().Stringer("broker", opts.Servers()[0]).Logger(), zerolog.DebugLevel, "Disconnecting from MQTT broker").Stop()
 	c.c.Disconnect(quiesce)
+}
+
+type hook func(e *zerolog.Event)
+
+func (h hook) Run(e *zerolog.Event, level zerolog.Level, message string) {
+	h(e)
 }

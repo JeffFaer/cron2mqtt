@@ -6,10 +6,12 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/term"
 
+	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 )
 
@@ -110,6 +112,7 @@ func promptPassword() ([]byte, error) {
 }
 
 func loadConfig() (mqtt.Config, error) {
+	defer logutil.StartTimer(zerolog.InfoLevel, "Loading config").Stop()
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			return mqtt.Config{}, err

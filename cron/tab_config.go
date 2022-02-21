@@ -7,9 +7,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/apex/log"
 	"github.com/kballard/go-shellquote"
 	cron "github.com/robfig/cron/v3"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -169,7 +169,7 @@ func (c *Command) Transform(f func(cmd string) string) {
 	orig := f(c.orig)
 	args, err := shellquote.Split(orig)
 	if err != nil {
-		log.WithError(err).Warnf("command %q is malformed", orig)
+		log.Warn().Err(err).Msgf("command %q is malformed", orig)
 		args = nil
 	}
 

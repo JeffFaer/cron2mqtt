@@ -5,9 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
+	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
 )
@@ -46,11 +48,13 @@ func init() {
 }
 
 func run(args []string) exec.Result {
+	defer logutil.StartTimer(zerolog.InfoLevel, "Executing command").Stop()
 	sh := os.Getenv("SHELL")
 	return exec.Run(sh, "-c", strings.Join(args, " "))
 }
 
 func publish(id string, conf mqtt.Config, args []string, res exec.Result) error {
+	defer logutil.StartTimer(zerolog.InfoLevel, "publishing to MQTT").Stop()
 	c, err := mqtt.NewClient(conf)
 	if err != nil {
 		return fmt.Errorf("could not initialize MQTT: %w", err)

@@ -8,10 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+
+	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
-
-	"github.com/spf13/cobra"
 )
 
 func init() {
@@ -105,9 +108,11 @@ func init() {
 					continue
 				}
 
+				t := logutil.StartTimerLogger(log.With().Str("id", id).Logger(), zerolog.InfoLevel, "Pruning")
 				if err := cj.UnpublishConfig(cl); err != nil {
 					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID(), err)
 				}
+				t.Stop()
 			}
 			return nil
 		},
@@ -117,6 +122,8 @@ func init() {
 }
 
 func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*hass.CronJob, error) {
+	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering cron jobs").Stop()
+
 	cjs := make(chan *hass.CronJob, 100)
 	if err := hass.DiscoverCronJobs(ctx, cl, chan<- *hass.CronJob(cjs)); err != nil {
 		return nil, err

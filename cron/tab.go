@@ -6,6 +6,11 @@ import (
 	"os/exec"
 	"os/user"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+
+	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 )
 
 // Tab represents a crontab that exists somewhere.
@@ -24,6 +29,7 @@ func TabForUser(u *user.User) Tab {
 }
 
 func (t *userTab) Load() (*TabConfig, error) {
+	defer logutil.StartTimerLogger(log.With().Str("user", t.u.Username).Logger(), zerolog.DebugLevel, "Loading crontab for user").Stop()
 	var stdout bytes.Buffer
 	cmd := exec.Command("crontab", "-u", t.u.Username, "-l")
 	cmd.Stdout = &stdout
@@ -35,6 +41,8 @@ func (t *userTab) Load() (*TabConfig, error) {
 }
 
 func (t *userTab) Update(tc *TabConfig) error {
+	defer logutil.StartTimerLogger(log.With().Str("user", t.u.Username).Logger(), zerolog.DebugLevel, "Updating crontab for user").Stop()
+
 	cmd := exec.Command("crontab", "-u", t.u.Username, "-")
 	cmd.Stdin = strings.NewReader(tc.String())
 	if err := cmd.Run(); err != nil {
