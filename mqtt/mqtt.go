@@ -73,26 +73,31 @@ func NewClient(c Config) (*Client, error) {
 
 // Publish publishes the given payload on the given topic on the connected broker.
 func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload interface{}) error {
-	payloadHook := func(e *zerolog.Event) {
-		if log.Logger.GetLevel() <= zerolog.TraceLevel {
-			var b []byte
-			switch p := payload.(type) {
-			case string:
-				b = []byte(p)
-			case []byte:
-				b = []byte(p)
-			default:
-				b = []byte(fmt.Sprintf("%s", p))
-			}
+	payloadHook := logutil.FuncOnce(func(e *zerolog.Event) {
+		var b []byte
+		switch p := payload.(type) {
+		case string:
+			b = []byte(p)
+		case []byte:
+			b = []byte(p)
+		default:
+			b = []byte(fmt.Sprintf("%s", p))
+		}
 
-			if json.Valid(b) {
-				e.RawJSON("payload", b)
-			} else {
-				e.Str("payload", string(b))
+		if json.Valid(b) {
+			e.RawJSON("payload", b)
+		} else {
+			e.Str("payload", string(b))
+		}
+	})
+	payloadHook = func(h logutil.FuncHook) logutil.FuncHook {
+		return func(e *zerolog.Event) {
+			if log.Logger.GetLevel() <= zerolog.TraceLevel {
+				h(e)
 			}
 		}
-	}
-	defer logutil.StartTimerLogger(log.With().Str("topic", topic).Logger().Hook(hook(payloadHook)), zerolog.DebugLevel, "Publishing message to MQTT topic").Stop()
+	}(payloadHook)
+	defer logutil.StartTimerLogger(log.With().Str("topic", topic).Logger().Hook(payloadHook), zerolog.DebugLevel, "Publishing message to MQTT topic").Stop()
 	t := c.c.Publish(topic, byte(qos), bool(retain), payload)
 	t.Wait()
 	return t.Error()
@@ -100,12 +105,18 @@ func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload inter
 
 func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages chan<- Message) error {
 	start := zerolog.TimestampFunc()
-	log := log.Ctx(ctx).Hook(hook(func(e *zerolog.Event) { e.TimeDiff("offset", zerolog.TimestampFunc(), start) })).With().Str("topic", topic).Logger()
+	log := log.Ctx(ctx).Hook(logutil.FuncHook(func(e *zerolog.Event) { e.TimeDiff("offset", zerolog.TimestampFunc(), start) })).With().Str("topic", topic).Logger()
 	log.Debug().Msg("Subscribing to MQTT topic")
 
 	var closeOnce sync.Once
 	unsub := func() error {
 		log.Debug().Msg("Unsubscribing from MQTT topic")
+		if !c.c.IsConnected() {
+			log.Debug().Msg("Client is not connected")
+			closeOnce.Do(func() { close(messages) })
+			return nil
+		}
+
 		if t := c.c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
 			return t.Error()
 		}
@@ -163,10 +174,4 @@ func (c *Client) Close(quiesce uint) {
 	opts := c.c.OptionsReader()
 	defer logutil.StartTimerLogger(log.With().Stringer("broker", opts.Servers()[0]).Logger(), zerolog.DebugLevel, "Disconnecting from MQTT broker").Stop()
 	c.c.Disconnect(quiesce)
-}
-
-type hook func(e *zerolog.Event)
-
-func (h hook) Run(e *zerolog.Event, level zerolog.Level, message string) {
-	h(e)
 }
