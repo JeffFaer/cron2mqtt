@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
@@ -69,6 +68,7 @@ type deviceConfig struct {
 
 // Plugin provides home assistant specific funcionality to mqttcron.CronJob.
 type Plugin struct {
+	mqttcron.NopPlugin
 	configTopic string
 }
 
@@ -108,7 +108,8 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 		},
 		UniqueID: cj.ID,
 		ObjectID: "cron_job_" + cj.ID,
-		Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, "TODO"),
+		// TODO: Figure out the name of the cron job.
+		Name: fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, "TODO"),
 
 		DeviceClass: "problem",
 		Icon:        "mdi:robot",
@@ -124,10 +125,6 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 	if err := pub.Publish(p.configTopic, mqtt.QoSExactlyOnce, mqtt.Retain, b); err != nil {
 		return fmt.Errorf("could not publish discovery config: %w", err)
 	}
-	return nil
-}
-
-func (*Plugin) PublishResult(*mqttcron.CronJob, mqttcron.Publisher, exec.Result) error {
 	return nil
 }
 

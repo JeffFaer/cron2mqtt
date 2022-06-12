@@ -17,10 +17,17 @@ type Plugin interface {
 	PublishResult(cj *CronJob, pub Publisher, res exec.Result) error
 }
 
+type NopPlugin struct{}
+
+func (NopPlugin) Init(*CronJob, TopicRegister) error                   { return nil }
+func (NopPlugin) OnCreate(*CronJob, Publisher) error                   { return nil }
+func (NopPlugin) PublishResult(*CronJob, Publisher, exec.Result) error { return nil }
+
 // TopicRegister lets Plugins declare that they would like to publish to a particular topic.
 //  - Only one plugin may publish to a particular topic.
 //  - You may only publish to a topic with mqtt.Retain if it is registered with mqtt.Retain. You are allowed to publish to a topic with mqtt.DoNotRetain even if it's registered with mqtt.Retain.
 type TopicRegister interface {
+	// RegisterSuffix registers a topic that is prefixed with the standard topic prefix for the cron job. The complete topic string is returned from this method. You may publish to this topic with mqtt.Retain if you wish.
 	RegisterSuffix(suffix string) string
 	RegisterTopic(topic string, retain mqtt.RetainMode)
 }

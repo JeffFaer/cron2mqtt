@@ -45,18 +45,26 @@ func ValidateTopicComponent(s string) error {
 type Publisher interface {
 	Publish(topic string, qos mqtt.QoS, retain mqtt.RetainMode, payload interface{}) error
 }
+type Subscriber interface {
+	Subscribe(ctx context.Context, topic string, qos mqtt.QoS, messages chan<- mqtt.Message) error
+}
+type Client interface {
+	Publisher
+	Subscriber
+}
 
 type CronJob struct {
 	ID string
 
-	client      *mqtt.Client
+	client      Client
 	topicPrefix string
 	plugins     []Plugin
 	topics      map[Plugin]map[string]mqtt.RetainMode
 }
 
-func NewCronJob(id string, c *mqtt.Client, ps ...Plugin) (*CronJob, error) {
-	cj, err := newCronJobNoCreate(id, c, ps...)
+// NewCronJob creates a new CronJob, and runs the provided plugins through Init and OnCreate.
+func NewCronJob(id string, c Client, ps ...Plugin) (*CronJob, error) {
+	cj, err := newCronJobNoCreate(id, c, ps)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +76,7 @@ func NewCronJob(id string, c *mqtt.Client, ps ...Plugin) (*CronJob, error) {
 	return cj, nil
 }
 
-func newCronJobNoCreate(id string, c *mqtt.Client, ps ...Plugin) (*CronJob, error) {
+func newCronJobNoCreate(id string, c Client, ps []Plugin) (*CronJob, error) {
 	if err := ValidateTopicComponent(id); err != nil {
 		return nil, fmt.Errorf("provided cron job ID is invalid: %w", err)
 	}
@@ -92,7 +100,7 @@ func newCronJobNoCreate(id string, c *mqtt.Client, ps ...Plugin) (*CronJob, erro
 }
 
 func (c *CronJob) initPlugins() error {
-	reg := topicRegister{
+	reg := &topicRegister{
 		prefix:         c.topicPrefix,
 		suffixes:       make(map[string]Plugin),
 		topics:         make(map[string]Plugin),
@@ -129,9 +137,9 @@ type topicRegister struct {
 	err error
 }
 
-func (reg topicRegister) RegisterSuffix(suffix string) string {
-	if p, ok := reg.suffixes[suffix]; ok && reg.p != p {
-		reg.err = multierr.Append(reg.err, fmt.Errorf("plugin %T tried to register topic %q which was already registered by %T", reg.p, suffix, p))
+func (reg *topicRegister) RegisterSuffix(suffix string) string {
+	if p, ok := reg.suffixes[suffix]; ok {
+		reg.err = multierr.Append(reg.err, fmt.Errorf("plugin %T tried to register suffix %q which was already registered by %T", reg.p, suffix, p))
 		return ""
 	}
 	t := reg.prefix + "/" + suffix
@@ -142,12 +150,12 @@ func (reg topicRegister) RegisterSuffix(suffix string) string {
 	return t
 }
 
-func (reg topicRegister) RegisterTopic(topic string, retain mqtt.RetainMode) {
+func (reg *topicRegister) RegisterTopic(topic string, retain mqtt.RetainMode) {
 	reg.registerTopic(topic, retain)
 }
 
-func (reg topicRegister) registerTopic(topic string, retain mqtt.RetainMode) bool {
-	if p, ok := reg.topics[topic]; ok && reg.p != p {
+func (reg *topicRegister) registerTopic(topic string, retain mqtt.RetainMode) bool {
+	if p, ok := reg.topics[topic]; ok {
 		reg.err = multierr.Append(reg.err, fmt.Errorf("plugin %T tried to register topic %q which was already registered by %T", reg.p, topic, p))
 		return false
 	}
@@ -162,6 +170,9 @@ func (reg topicRegister) registerTopic(topic string, retain mqtt.RetainMode) boo
 	return true
 }
 
+// Plugin gives callers the ability to inspect Plugins.
+//
+// This will panic if it's called during Plugin.Init.
 func (c *CronJob) Plugin(ptr interface{}) bool {
 	if c.topics == nil {
 		panic(fmt.Errorf("cannot call Plugin before plugins are initialized"))
@@ -196,7 +207,7 @@ func (c *CronJob) onCreate() error {
 	return MultiPublish(fs...)
 }
 
-// PublishResult publishes message to MQTT about the given execution result.
+// PublishResult publishes one or more messages to MQTT about the given execution result.
 func (c *CronJob) PublishResult(res exec.Result) error {
 	var fs []func() error
 	for _, p := range c.plugins {
@@ -251,12 +262,13 @@ func (c *CronJob) unpublishPrefix(ctx context.Context, prefix string) error {
 	defer canc()
 
 	ms := make(chan mqtt.Message)
-	if err := c.client.Subscribe(ctx, c.topicPrefix+"/#", mqtt.QoSExactlyOnce, ms); err != nil {
-		return fmt.Errorf("could not subscribe to MQTT to find retained topics: %w", err)
+	if err := c.client.Subscribe(ctx, prefix+"/#", mqtt.QoSExactlyOnce, ms); err != nil {
+		return fmt.Errorf("could not subscribe to MQTT to find retained topics under %s: %w", prefix, err)
 	}
 
 	var i int32
 	go func() {
+		// Roughly, wait 200ms after we receive the last retained message.
 		dur := 200 * time.Millisecond // TODO: Make this configutable
 		for {
 			j := atomic.LoadInt32(&i)
@@ -276,6 +288,7 @@ func (c *CronJob) unpublishPrefix(ctx context.Context, prefix string) error {
 		if !m.Retained() {
 			continue
 		}
+		atomic.AddInt32(&i, 1)
 		err = multierr.Append(err, c.unpublishTopic(m.Topic()))
 	}
 

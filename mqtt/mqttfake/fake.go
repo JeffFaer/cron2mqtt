@@ -8,6 +8,13 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+func NewClient() *Client {
+	return &Client{
+		messages: make(map[string][]message),
+		handlers: make(map[string]mqtt.MessageHandler),
+	}
+}
+
 type message struct {
 	topic    string
 	qos      byte
@@ -42,7 +49,7 @@ type token struct {
 	err error
 }
 
-var ok *token = nil
+var okToken *token = nil
 
 func newToken(err <-chan error) *token {
 	done := make(chan struct{})
@@ -107,13 +114,6 @@ type Client struct {
 	handlers map[string]mqtt.MessageHandler
 }
 
-func NewClient() *Client {
-	return &Client{
-		messages: make(map[string][]message),
-		handlers: make(map[string]mqtt.MessageHandler),
-	}
-}
-
 func (*Client) IsConnected() bool {
 	return true
 }
@@ -143,7 +143,7 @@ func (c *Client) Publish(topic string, qos byte, retained bool, payload interfac
 	h, ok := c.handlers[topic]
 	if !ok {
 		c.mut.Unlock()
-		return nil
+		return okToken
 	}
 
 	err := make(chan error)
@@ -163,7 +163,7 @@ func (c *Client) SubscribeMultiple(filters map[string]byte, callback mqtt.Messag
 	for t := range filters {
 		c.handlers[t] = callback
 	}
-	return ok
+	return okToken
 }
 func (c *Client) Unsubscribe(topics ...string) mqtt.Token {
 	c.mut.Lock()
@@ -171,7 +171,7 @@ func (c *Client) Unsubscribe(topics ...string) mqtt.Token {
 	for _, t := range topics {
 		delete(c.handlers, t)
 	}
-	return ok
+	return okToken
 }
 func (*Client) AddRoute(topic string, callback mqtt.MessageHandler) {
 	panic("not yet implemented")

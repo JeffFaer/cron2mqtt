@@ -9,11 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type Subscriber interface {
-	Subscribe(ctx context.Context, topic string, qos mqtt.QoS, messages chan<- mqtt.Message) error
-}
-
-func DiscoverCronJobs(ctx context.Context, c *mqtt.Client, ch chan<- *CronJob, fs ...func() Plugin) error {
+func DiscoverCronJobs(ctx context.Context, c Client, ch chan<- *CronJob, fs ...func() Plugin) error {
 	d, err := CurrentDevice()
 	if err != nil {
 		close(ch)
@@ -54,7 +50,7 @@ func DiscoverCronJobs(ctx context.Context, c *mqtt.Client, ch chan<- *CronJob, f
 	return nil
 }
 
-func discoverCronJob(pre, post string, m mqtt.Message, c *mqtt.Client, fs []func() Plugin) (*CronJob, error) {
+func discoverCronJob(pre, post string, m mqtt.Message, c Client, fs []func() Plugin) (*CronJob, error) {
 	defer m.Ack()
 	id := strings.TrimPrefix(m.Topic(), pre)
 	id = strings.TrimSuffix(id, post)
@@ -62,5 +58,5 @@ func discoverCronJob(pre, post string, m mqtt.Message, c *mqtt.Client, fs []func
 	for _, f := range fs {
 		ps = append(ps, f())
 	}
-	return newCronJobNoCreate(id, c, ps...)
+	return newCronJobNoCreate(id, c, ps)
 }

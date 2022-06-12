@@ -34,10 +34,8 @@ func init() {
 
 			if c, err := loadConfig(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
-			} else {
-				if err := publish(id, c, args, res); err != nil {
-					fmt.Fprintf(os.Stderr, "Could not publish to MQTT: %s\n", err)
-				}
+			} else if err := publish(id, c, args, res); err != nil {
+				fmt.Fprintf(os.Stderr, "Could not publish to MQTT: %s\n", err)
 			}
 
 			if res.ExitCode != 0 {
@@ -55,7 +53,7 @@ func run(args []string) exec.Result {
 }
 
 func publish(id string, conf mqtt.Config, args []string, res exec.Result) error {
-	defer logutil.StartTimer(zerolog.InfoLevel, "publishing to MQTT").Stop()
+	defer logutil.StartTimer(zerolog.InfoLevel, "Publishing to MQTT").Stop()
 	c, err := mqtt.NewClient(conf)
 	if err != nil {
 		return fmt.Errorf("could not initialize MQTT: %w", err)
@@ -69,7 +67,7 @@ func publish(id string, conf mqtt.Config, args []string, res exec.Result) error 
 	}
 
 	if err := cj.PublishResult(res); err != nil {
-		return fmt.Errorf("problem publishing results to mqttcron.CronJob: %w", err)
+		return fmt.Errorf("could not publish result to mqttcron.CronJob: %w", err)
 	}
 
 	return nil

@@ -81,6 +81,10 @@ func NewClient(c Config) (*Client, error) {
 	return &cl, nil
 }
 
+func NewClientForTesting(c mqtt.Client) *Client {
+	return &Client{c}
+}
+
 // Publish publishes the given payload on the given topic on the connected broker.
 func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload interface{}) error {
 	payloadHook := logutil.FuncOnce(func(e *zerolog.Event) {
