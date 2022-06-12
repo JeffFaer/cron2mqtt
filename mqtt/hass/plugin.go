@@ -72,6 +72,10 @@ type Plugin struct {
 	configTopic string
 }
 
+func NewPlugin() mqttcron.Plugin {
+	return &Plugin{}
+}
+
 func (p *Plugin) Init(cj *mqttcron.CronJob, reg mqttcron.TopicRegister) error {
 	d, err := mqttcron.CurrentDevice()
 	if err != nil {

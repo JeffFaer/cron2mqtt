@@ -117,7 +117,7 @@ func (c *Client) Publish(topic string, qos QoS, retain RetainMode, payload inter
 	return t.Error()
 }
 
-func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages chan<- Message) error {
+func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, ch chan<- Message) error {
 	start := zerolog.TimestampFunc()
 	log := log.Ctx(ctx).Hook(logutil.FuncHook(func(e *zerolog.Event) { e.TimeDiff("offset", zerolog.TimestampFunc(), start) })).With().Str("topic", topic).Logger()
 	log.Debug().Msg("Subscribing to MQTT topic")
@@ -127,14 +127,14 @@ func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages 
 		log.Debug().Msg("Unsubscribing from MQTT topic")
 		if !c.c.IsConnected() {
 			log.Debug().Msg("Client is not connected")
-			closeOnce.Do(func() { close(messages) })
+			closeOnce.Do(func() { close(ch) })
 			return nil
 		}
 
 		if t := c.c.Unsubscribe(topic); t.Wait() && t.Error() != nil {
 			return t.Error()
 		}
-		closeOnce.Do(func() { close(messages) })
+		closeOnce.Do(func() { close(ch) })
 		log.Debug().Msg("Unsubscribed from MQTT topic")
 		return nil
 	}
@@ -163,11 +163,11 @@ func (c *Client) Subscribe(ctx context.Context, topic string, qos QoS, messages 
 		select {
 		case <-ctx.Done():
 			log.Msg("Dropping message")
-		case messages <- m:
+		case ch <- m:
 			log.Msg("Received message")
 		}
 	}); t.Wait() && t.Error() != nil {
-		close(messages)
+		close(ch)
 		return t.Error()
 	}
 

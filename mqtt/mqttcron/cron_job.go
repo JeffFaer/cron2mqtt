@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/btcsuite/btcutil/base58"
@@ -251,48 +250,27 @@ func (c *CronJob) Unpublish(ctx context.Context) error {
 			fs = append(fs, func() error { return c.unpublishTopic(t) })
 		}
 	}
-
 	return MultiPublish(fs...)
 }
 
 func (c *CronJob) unpublishPrefix(ctx context.Context, prefix string) error {
 	defer logutil.StartTimerLogger(log.Ctx(ctx).With().Str("prefix", prefix).Logger(), zerolog.DebugLevel, "Unpublishing by prefix").Stop()
 
-	ctx, canc := context.WithCancel(ctx)
-	defer canc()
-
-	ms := make(chan mqtt.Message)
-	if err := c.client.Subscribe(ctx, prefix+"/#", mqtt.QoSExactlyOnce, ms); err != nil {
-		return fmt.Errorf("could not subscribe to MQTT to find retained topics under %s: %w", prefix, err)
+	ms := make(chan mqtt.Message, 100)
+	timeout := 200 * time.Millisecond // TODO: Make this configutable
+	if err := discoverRetainedMessages(ctx, prefix+"/#", c.client, timeout, chan<- mqtt.Message(ms)); err != nil {
+		return err
 	}
 
-	var i int32
-	go func() {
-		// Roughly, wait 200ms after we receive the last retained message.
-		dur := 200 * time.Millisecond // TODO: Make this configutable
-		for {
-			j := atomic.LoadInt32(&i)
-			select {
-			case <-time.After(dur):
-				if j == atomic.LoadInt32(&i) {
-					canc()
-					return
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-	var err error
+	var errs error
 	for m := range ms {
-		if !m.Retained() {
-			continue
+		if err := c.unpublishTopic(m.Topic()); err != nil {
+			errs = multierr.Append(errs, err)
+		} else {
+			m.Ack()
 		}
-		atomic.AddInt32(&i, 1)
-		err = multierr.Append(err, c.unpublishTopic(m.Topic()))
 	}
-
-	return err
+	return errs
 }
 
 func (c *CronJob) unpublishTopic(topic string) error {
