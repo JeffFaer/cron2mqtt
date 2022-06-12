@@ -26,14 +26,13 @@ func DiscoverCronJobs(ctx context.Context, c Client, ch chan<- *CronJob, fs ...f
 	}
 
 	go func() {
+		defer close(ch)
 		for {
 			select {
 			case <-ctx.Done():
-				close(ch)
 				return
 			case m, ok := <-ms:
 				if !ok {
-					close(ch)
 					return
 				}
 				id := m.Topic()
@@ -53,7 +52,6 @@ func DiscoverCronJobs(ctx context.Context, c Client, ch chan<- *CronJob, fs ...f
 
 				select {
 				case <-ctx.Done():
-					close(ch)
 					return
 				case ch <- cj:
 				}
@@ -80,18 +78,17 @@ func discoverRetainedMessages(ctx context.Context, topic string, c Client, timeo
 	}
 
 	go func() {
+		defer close(ch)
 		defer canc()
 		var timeoutCh <-chan time.Time
 		for {
 			select {
 			case <-origCtx.Done():
-				close(ch)
 				return
 			case <-timeoutCh:
 				canc() // Signal to Subscribe that we're done.
 			case m, ok := <-ms:
 				if !ok {
-					close(ch)
 					return
 				} else if !m.Retained() {
 					continue
@@ -103,7 +100,6 @@ func discoverRetainedMessages(ctx context.Context, topic string, c Client, timeo
 
 				select {
 				case <-origCtx.Done():
-					close(ch)
 					return
 				case ch <- m:
 				}
