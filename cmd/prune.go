@@ -132,19 +132,9 @@ func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*mqttcron.C
 	}
 
 	var res []*mqttcron.CronJob
-	func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case cj, ok := <-cjs:
-				if !ok {
-					return
-				}
-				res = append(res, cj)
-			}
-		}
-	}()
+	for cj := range cjs {
+		res = append(res, cj)
+	}
 
 	return res, nil
 }
