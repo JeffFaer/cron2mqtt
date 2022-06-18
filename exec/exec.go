@@ -2,6 +2,7 @@ package exec
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -26,8 +27,8 @@ type Result struct {
 // Run the command immediately, and wait for it to complete.
 //
 // The command's stdout and stderr will be plumbed through to the current stdout and stderr.
-func Run(name string, args ...string) Result {
-	c := exec.Command(name, args...)
+func Run(ctx context.Context, name string, args ...string) Result {
+	c := exec.CommandContext(ctx, name, args...)
 	var stdout, stderr bytes.Buffer
 	c.Stdin = os.Stdin
 	c.Stdout = io.MultiWriter(os.Stdout, &stdout)
@@ -43,9 +44,7 @@ func Run(name string, args ...string) Result {
 	res.Stdout = stdout.Bytes()
 	res.Stderr = stderr.Bytes()
 	res.ExitCode = c.ProcessState.ExitCode()
-	if _, ok := err.(*exec.ExitError); !ok {
-		res.Err = err
-	}
+	res.Err = err
 
 	return res
 }

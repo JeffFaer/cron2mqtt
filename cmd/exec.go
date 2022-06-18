@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -21,15 +23,15 @@ func init() {
 		Short: "Executes a command, and publishes its results to MQTT.",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, canc := signal.NotifyContext(cmd.Context(), os.Interrupt)
+			defer canc()
 			id := args[0]
 			args = args[1:]
-			res := run(args)
+			res := run(ctx, args)
 
-			if res.Err != nil {
+			if len(res.Stderr) == 0 && res.Err != nil {
 				fmt.Fprintln(os.Stderr, res.Err)
-				if len(res.Stderr) == 0 {
-					res.Stderr = []byte(res.Err.Error())
-				}
+				res.Stderr = []byte(res.Err.Error())
 			}
 
 			if c, err := loadConfig(); err != nil {
@@ -46,10 +48,10 @@ func init() {
 	})
 }
 
-func run(args []string) exec.Result {
+func run(ctx context.Context, args []string) exec.Result {
 	defer logutil.StartTimer(zerolog.InfoLevel, "Executing command").Stop()
 	sh := os.Getenv("SHELL")
-	return exec.Run(sh, "-c", strings.Join(args, " "))
+	return exec.Run(ctx, sh, "-c", strings.Join(args, " "))
 }
 
 func publish(id string, conf mqtt.Config, args []string, res exec.Result) error {
