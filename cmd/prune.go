@@ -124,17 +124,6 @@ func init() {
 }
 
 func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*mqttcron.CronJob, error) {
-	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering cron jobs").Stop()
-
-	cjs := make(chan *mqttcron.CronJob, 100)
-	if err := mqttcron.DiscoverCronJobs(ctx, cl, chan<- *mqttcron.CronJob(cjs), hass.NewPlugin); err != nil {
-		return nil, err
-	}
-
-	var res []*mqttcron.CronJob
-	for cj := range cjs {
-		res = append(res, cj)
-	}
-
-	return res, nil
+	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering remote cron jobs").Stop()
+	return mqttcron.DiscoverCronJobs(ctx, cl, hass.NewPlugin)
 }

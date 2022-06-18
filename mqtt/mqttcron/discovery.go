@@ -7,52 +7,40 @@ import (
 	"time"
 
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
-	"github.com/rs/zerolog/log"
 )
 
-func DiscoverCronJobs(ctx context.Context, c Client, ch chan<- *CronJob, fs ...func() Plugin) error {
+func DiscoverCronJobs(ctx context.Context, c Client, fs ...func() Plugin) ([]*CronJob, error) {
 	d, err := CurrentDevice()
 	if err != nil {
-		close(ch)
-		return err
+		return nil, err
 	}
 
 	pre := d.topicPrefix + "/"
 	post := "/discovery"
 	ms := make(chan mqtt.Message, 100)
 	if err := discoverRetainedMessages(ctx, pre+"+"+post, c, 0, chan<- mqtt.Message(ms)); err != nil {
-		close(ch)
-		return err
+		return nil, err
 	}
 
-	go func() {
-		defer close(ch)
-
-		for m := range ms {
-			id := m.Topic()
-			id = strings.TrimPrefix(id, pre)
-			id = strings.TrimSuffix(id, post)
-			var ps []Plugin
-			for _, f := range fs {
-				ps = append(ps, f())
-			}
-			cj, err := newCronJobNoCreate(id, c, ps)
-			if err != nil {
-				log.Warn().Err(err).Msg("Error while discovering cron jobs")
-				continue
-			} else {
-				m.Ack()
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case ch <- cj:
-			}
+	var cjs []*CronJob
+	for m := range ms {
+		id := m.Topic()
+		id = strings.TrimPrefix(id, pre)
+		id = strings.TrimSuffix(id, post)
+		var ps []Plugin
+		for _, f := range fs {
+			ps = append(ps, f())
 		}
-	}()
+		cj, err := newCronJobNoCreate(id, c, ps)
+		if err != nil {
+			return nil, fmt.Errorf("could not create cron job %q: %w", id, err)
+		}
 
-	return nil
+		m.Ack()
+		cjs = append(cjs, cj)
+	}
+
+	return cjs, nil
 }
 
 // discoverRetainedMessages subscribes to topic and reports any retained messages on ch.
