@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"go.uber.org/multierr"
 
@@ -35,20 +36,36 @@ type TopicRegister interface {
 
 type CorePlugin struct {
 	DiscoveryTopic   string
+	MetadataTopic    string
 	ResultsTopic     string
 	LastSuccessTopic string
 }
 
 func (p *CorePlugin) Init(cj *CronJob, reg TopicRegister) error {
 	p.DiscoveryTopic = reg.RegisterSuffix("discovery")
+	p.MetadataTopic = reg.RegisterSuffix("metadata")
 	p.ResultsTopic = reg.RegisterSuffix("results")
 	p.LastSuccessTopic = reg.RegisterSuffix("last_success")
 	return nil
 }
 
 func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
-	// TODO: Include the estimated next execution time, if we can find the schedule for this cron job.
-	return pub.Publish(p.DiscoveryTopic, mqtt.QoSExactlyOnce, mqtt.Retain, "1")
+	var t *time.Time
+	if cj.Schedule != nil {
+		u := cj.Schedule.Next(time.Now())
+		t = &u
+	}
+	m := map[string]interface{}{
+		"nextExecutionTime": t,
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	return MultiPublish(
+		func() error { return pub.Publish(p.DiscoveryTopic, mqtt.QoSExactlyOnce, mqtt.Retain, "1") },
+		func() error { return pub.Publish(p.MetadataTopic, mqtt.QoSExactlyOnce, mqtt.Retain, b) })
 }
 
 func (p *CorePlugin) PublishResult(cj *CronJob, pub Publisher, res exec.Result) error {
@@ -66,17 +83,14 @@ func (p *CorePlugin) PublishResult(cj *CronJob, pub Publisher, res exec.Result) 
 		return fmt.Errorf("could not marshal results: %w", err)
 	}
 
-	if err := MultiPublish(
+	return MultiPublish(
 		func() error { return pub.Publish(p.ResultsTopic, mqtt.QoSExactlyOnce, mqtt.DoNotRetain, b) },
 		func() error {
 			if res.ExitCode != 0 {
 				return nil
 			}
 			return pub.Publish(p.LastSuccessTopic, mqtt.QoSExactlyOnce, mqtt.Retain, b)
-		}); err != nil {
-		return fmt.Errorf("could not publish result for cron job %s: %w", cj.ID, err)
-	}
-	return nil
+		})
 }
 
 // MultiPublish runs all of the functions in parallel and returns a multierr for all those that failed.

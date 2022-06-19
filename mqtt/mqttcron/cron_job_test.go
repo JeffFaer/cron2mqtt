@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttfake"
 )
@@ -111,6 +112,60 @@ func TestPluginPublish(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSameCron2mqttCommand(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+
+		c1 string
+		c2 string
+
+		want bool
+	}{
+		{
+			name: "simple",
+			c1:   "cron2mqtt exec abcd echo true",
+			c2:   "cron2mqtt exec abcd echo true",
+			want: true,
+		},
+		{
+			name: "different cron2mqtt path",
+			c1:   "cron2mqtt exec abcd echo true",
+			c2:   "/usr/bin/cron2mqtt exec abcd echo true",
+			want: true,
+		},
+		{
+			name: "different flags",
+			c1:   "cron2mqtt exec abcd echo true",
+			c2:   "cron2mqtt exec -vvv abcd echo true",
+			want: false,
+		},
+		{
+			name: "different commands",
+			c1:   "cron2mqtt exec abcd echo true",
+			c2:   "cron2mqtt exec abcd echo false",
+			want: false,
+		},
+		{
+			name: "significantly different commands",
+			c1:   "cron2mqtt exec abcd echo true",
+			c2:   "cron2mqtt exec abcd echo",
+			want: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c1 := cron.NewCommand(tc.c1)
+			c2 := cron.NewCommand(tc.c2)
+			if got := sameCron2mqttCommand(c1, c2); got != tc.want {
+				t.Errorf("sameCron2mqttCommand(%q, %q) = %t, want %t", tc.c1, tc.c2, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDiscoverLocalCronjobIfPossible(t *testing.T) {
+	// TODO
 }
 
 func TestUnpublish(t *testing.T) {

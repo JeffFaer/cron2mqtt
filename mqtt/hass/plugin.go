@@ -144,6 +144,9 @@ func nodeID(d mqttcron.Device) (string, error) {
 }
 
 func commandName(id string, c *cron.Command) string {
+	if c == nil {
+		return id
+	}
 	args, ok := c.Args()
 	if !ok {
 		return c.String()

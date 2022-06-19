@@ -258,8 +258,8 @@ func (c *CronJob) discoverLocalCronJobIfNecessary() {
 		return
 	}
 
-	if c.Command != nil && j.Command.String() != c.Command.String() {
-		log.Warn().Str("id", c.ID).Str("got", j.Command.String()).Str("want", j.Command.String()).Msgf("Found cron job configuration that does not match current CronJob")
+	if c.Command != nil && !sameCron2mqttCommand(j.Command, c.Command) {
+		log.Warn().Str("id", c.ID).Str("got", j.Command.String()).Str("want", c.Command.String()).Msgf("Found cron job configuration that does not match current CronJob")
 	}
 	if c.Schedule == nil {
 		c.Schedule = &j.Schedule
@@ -267,6 +267,29 @@ func (c *CronJob) discoverLocalCronJobIfNecessary() {
 	if c.Command == nil {
 		c.Command = j.Command
 	}
+}
+
+func sameCron2mqttCommand(c1 *cron.Command, c2 *cron.Command) bool {
+	if !c1.IsCron2Mqtt() || !c2.IsCron2Mqtt() {
+		return false
+	}
+	if c1.String() == c2.String() {
+		return true
+	}
+	a1, ok1 := c1.Args()
+	a2, ok2 := c2.Args()
+	if !ok1 || !ok2 {
+		return false
+	}
+	if len(a1) != len(a2) {
+		return false
+	}
+	for i := 1; i < len(a1); i++ {
+		if a1[i] != a2[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // PublishResult publishes one or more messages to MQTT about the given execution result.

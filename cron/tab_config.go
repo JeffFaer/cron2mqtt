@@ -5,6 +5,7 @@ import (
 	"os/user"
 	"path"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -154,6 +155,11 @@ func (j *Job) String() string {
 type Schedule struct {
 	orig     string
 	schedule cron.Schedule
+}
+
+// Next returns the estimated next exectuion time of this Schedule that happens strictly after t.
+func (s Schedule) Next(t time.Time) time.Time {
+	return s.schedule.Next(t)
 }
 
 type Command struct {
