@@ -153,10 +153,19 @@ func commandName(id string, c *cron.Command) string {
 	}
 
 	var shArgs []string
-	if i := index(args, "--"); i > 0 {
-		shArgs = args[i+1:]
-	} else if i := index(args, id); 0 <= i && i < len(args)-1 {
-		shArgs = args[i+1:]
+	for i, arg := range args {
+		if arg == "--" {
+			shArgs = args[i+1:]
+			break
+		}
+		if arg == id && i < len(args)-1 {
+			shArgs = []string{}
+			continue
+		}
+		if shArgs == nil || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		shArgs = append(shArgs, arg)
 	}
 	if len(shArgs) > 0 {
 		if sp, err := shellquote.Split(strings.Join(shArgs, " ")); err == nil {

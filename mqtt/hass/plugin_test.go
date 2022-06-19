@@ -24,12 +24,36 @@ func TestCommandName(t *testing.T) {
 			want: "echo true",
 		},
 		{
+			name: "simple with flags",
+
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd -vvv echo true",
+
+			want: "echo true",
+		},
+		{
+			name: "ambiguous flag",
+
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd echo true -vvv",
+
+			want: "echo true",
+		},
+		{
 			name: "dashdash",
 
 			id:  "abcd",
 			cmd: "cron2mqtt exec abcd -- echo true",
 
 			want: "echo true",
+		},
+		{
+			name: "dashdash with flags",
+
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd -vvv -- echo -n true",
+
+			want: "echo -n true",
 		},
 		{
 			name: "quoted command",
@@ -40,6 +64,14 @@ func TestCommandName(t *testing.T) {
 			want: "echo true",
 		},
 		{
+			name: "quoted command with flags",
+
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd -vvv 'echo -n true'",
+
+			want: "echo -n true",
+		},
+		{
 			name: "unsplittable",
 
 			id:  "abcd",
@@ -48,13 +80,20 @@ func TestCommandName(t *testing.T) {
 			want: "cron2mqtt exec abcd 'echo true",
 		},
 		{
-			name: "ambiguous flag",
+			name: "missing command",
 
-			id: "abcd",
-			// The -vvv flag technically applies to cron2mqtt.
-			cmd: "cron2mqtt exec abcd echo true -vvv",
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd",
 
-			want: "echo true -vvv",
+			want: "cron2mqtt exec abcd",
+		},
+		{
+			name: "dashdash missing command",
+
+			id:  "abcd",
+			cmd: "cron2mqtt exec abcd --",
+
+			want: "cron2mqtt exec abcd --",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
