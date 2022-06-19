@@ -170,6 +170,10 @@ func (s Schedule) Next(t time.Time) time.Time {
 	return s.schedule.Next(t)
 }
 
+func (s Schedule) String() string {
+	return s.orig
+}
+
 type Command struct {
 	orig string
 	args []string // Present if we're able to split orig into shell-parsed indivual arguments.

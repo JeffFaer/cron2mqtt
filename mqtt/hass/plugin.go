@@ -16,8 +16,6 @@ import (
 const (
 	failureState = "failure"
 	successState = "success"
-
-	discoveryPrefix = "homeassistant"
 )
 
 var (
@@ -107,11 +105,15 @@ type deviceConfig struct {
 // Plugin provides home assistant specific funcionality to mqttcron.CronJob.
 type Plugin struct {
 	mqttcron.NopPlugin
+	discoveryPrefix string
+
 	configTopic string
 }
 
 func NewPlugin() mqttcron.Plugin {
-	return &Plugin{}
+	return &Plugin{
+		discoveryPrefix: "homeassistant", // TODO: Make this configurable.
+	}
 }
 
 func (p *Plugin) Init(cj *mqttcron.CronJob, reg mqttcron.TopicRegister) error {
@@ -124,7 +126,10 @@ func (p *Plugin) Init(cj *mqttcron.CronJob, reg mqttcron.TopicRegister) error {
 		return err
 	}
 
-	p.configTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", discoveryPrefix, nodeID, cj.ID)
+	// TODO: Add more sensors.
+	//   - Elapsed time
+	//   - stdout/stderr size?
+	p.configTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", p.discoveryPrefix, nodeID, cj.ID)
 	reg.RegisterTopic(p.configTopic, mqtt.Retain)
 	return nil
 }

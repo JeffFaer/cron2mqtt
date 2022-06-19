@@ -50,12 +50,16 @@ func (p *CorePlugin) Init(cj *CronJob, reg TopicRegister) error {
 }
 
 func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
+	var sched *string
 	var t *time.Time
 	if cj.Schedule != nil {
 		u := cj.Schedule.Next(time.Now())
+		s := cj.Schedule.String()
+		sched = &s
 		t = &u
 	}
 	m := map[string]interface{}{
+		"schedule":          sched,
 		"nextExecutionTime": t,
 	}
 	b, err := json.Marshal(m)
