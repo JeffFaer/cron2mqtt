@@ -3,13 +3,16 @@ package mqttcron
 import (
 	"context"
 	"fmt"
+	"os/user"
 	"strings"
 	"time"
 
+	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
+	"github.com/rs/zerolog/log"
 )
 
-func DiscoverCronJobs(ctx context.Context, c Client, fs ...func() Plugin) ([]*CronJob, error) {
+func DiscoverRemoteCronJobs(ctx context.Context, c Client, fs ...func() Plugin) ([]*CronJob, error) {
 	d, err := CurrentDevice()
 	if err != nil {
 		return nil, err
@@ -87,4 +90,54 @@ func discoverRetainedMessages(ctx context.Context, topic string, c Client, keepA
 	}()
 
 	return nil
+}
+
+// DiscoverLocalCronJobsById looks at local crontabs for cronjobs identified by one of the entries in ids.
+func DiscoverLocalCronJobsByID(cts []cron.Tab, u *user.User, ids []string) (map[string]*cron.Job, error) {
+	idSet := make(map[string]bool)
+	for _, id := range ids {
+		idSet[id] = true
+	}
+	foundCt := make(map[string]cron.Tab)
+	cjs := make(map[string]*cron.Job)
+
+	for _, ct := range cts {
+		t, err := ct.Load()
+		if err != nil {
+			return nil, fmt.Errorf("could not load %s: %w", ct, err)
+		}
+
+		for _, j := range t.Jobs() {
+			if j.User == nil || j.User.Uid != u.Uid {
+				continue
+			}
+			if !j.Command.IsCron2Mqtt() {
+				continue
+			}
+
+			// Check to see if any of the cron job's arguments are one of the remote cron job IDs.
+			args, ok := j.Command.Args()
+			if !ok {
+				continue
+			}
+			// The cron job's command will be at a minimum "cron2mqtt exec ID ...", so only start looking at the third element.
+			// Technically we're looking at more arugments than necessary, but it seems unlikely we'd have a false positive.
+			for _, arg := range args[2:] {
+				if !idSet[arg] {
+					continue
+				}
+				id := arg
+
+				if cj, ok := cjs[id]; ok {
+					log.Warn().Str("id", id).Msgf("Discovered ID multiple times:\n%s\n%s\n\n%s\n%s\n", foundCt[id], cj, ct, j)
+				} else {
+					foundCt[id] = ct
+					cjs[id] = j
+				}
+				break
+			}
+		}
+	}
+
+	return cjs, nil
 }

@@ -28,6 +28,12 @@ func TabForUser(u *user.User) Tab {
 	return &userTab{u}
 }
 
+// TabsForUser provides references to all crontabs that might contain a job for the user.
+func TabsForUser(u *user.User) []Tab {
+	// TODO: Check for more crontabs than just the user's.
+	return []Tab{TabForUser(u)}
+}
+
 func (t *userTab) Load() (*TabConfig, error) {
 	defer logutil.StartTimerLogger(log.With().Str("user", t.u.Username).Logger(), zerolog.DebugLevel, "Loading crontab for user").Stop()
 	var stdout bytes.Buffer
@@ -37,7 +43,7 @@ func (t *userTab) Load() (*TabConfig, error) {
 		return nil, fmt.Errorf("could not load crontab for %q: %w", t.u.Username, err)
 	}
 
-	return parseTabConfig(string(stdout.Bytes()), false)
+	return parseTabConfig(string(stdout.Bytes()), t.u)
 }
 
 func (t *userTab) Update(tc *TabConfig) error {
@@ -49,4 +55,8 @@ func (t *userTab) Update(tc *TabConfig) error {
 		return fmt.Errorf("could not update crontab for %q: %w", t.u.Username, err)
 	}
 	return nil
+}
+
+func (t *userTab) String() string {
+	return fmt.Sprintf("crontab for %q", t.u.Username)
 }

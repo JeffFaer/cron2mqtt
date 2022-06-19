@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"sort"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
+	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/hass"
@@ -26,15 +28,22 @@ func init() {
 		Short: "Looks for cron jobs on MQTT that don't exist locally, then purges them from MQTT.",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			u, err := user.Current()
+			if err != nil {
+				return fmt.Errorf("could not determine current user: %w", err)
+			}
+
 			c, err := loadConfig()
 			if err != nil {
 				return err
 			}
+
 			cl, err := mqtt.NewClient(c)
 			if err != nil {
 				return fmt.Errorf("could not initialize MQTT: %w", err)
 			}
 			defer cl.Close(250)
+
 			ctx := context.Background()
 			timeoutCtx, canc := context.WithTimeout(ctx, timeout)
 			defer canc()
@@ -59,39 +68,27 @@ func init() {
 				fmt.Printf("  %s\n", id)
 			}
 
-			cts, err := crontabs()
-			if err != nil {
-				return err
-			}
+			fmt.Println()
+			fmt.Println("Checking local crontabs...")
+			cts := cron.TabsForUser(u)
 			for _, ct := range cts {
-				fmt.Println()
-				fmt.Printf("Checking %s...\n", ct.name())
-				t, err := ct.Load()
+				fmt.Printf("  %s\n", ct)
+				local, err := mqttcron.DiscoverLocalCronJobsByID([]cron.Tab{ct}, u, remoteCronJobIDs)
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", ct.name(), err)
+					fmt.Fprintf(os.Stderr, "Could not check cron jobs: %s\n", err)
 					continue
 				}
 
-				for _, j := range t.Jobs() {
-					if !j.Command.IsCron2Mqtt() {
-						continue
-					}
+				for _, id := range remoteCronJobIDs {
+					if j, ok := local[id]; ok {
+						fmt.Println()
+						fmt.Printf("  Discovered cron job %s locally\n", id)
+						fmt.Printf("  $ %s\n", j.Command)
 
-					// Check to see if any of the cron job's arguments are one of the remote cron job IDs.
-					args, ok := j.Command.Args()
-					if !ok {
-						continue
-					}
-					// The cron job's command will be at a minimum "cron2mqtt exec ID ...", so only start looking at the third element.
-					// Technically we're looking at more arugments than necessary, but it seems unlikely we'd have a false positive.
-					for _, arg := range args[2:] {
-						if _, ok := remoteCronJobByID[arg]; ok {
-							fmt.Println()
-							fmt.Printf("  Discovered cron job %s locally:\n", arg)
-							fmt.Printf("  $ %s\n", j.Command)
-							delete(remoteCronJobByID, arg)
-							break
+						if _, ok := remoteCronJobByID[id]; !ok {
+							fmt.Fprintf(os.Stderr, "Discovered cron job %s more than once!\n", id)
 						}
+						delete(remoteCronJobByID, id)
 					}
 				}
 			}
@@ -125,5 +122,5 @@ func init() {
 
 func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*mqttcron.CronJob, error) {
 	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering remote cron jobs").Stop()
-	return mqttcron.DiscoverCronJobs(ctx, cl, hass.NewPlugin)
+	return mqttcron.DiscoverRemoteCronJobs(ctx, cl, hass.NewPlugin)
 }

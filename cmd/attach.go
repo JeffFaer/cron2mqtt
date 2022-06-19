@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
@@ -36,17 +37,18 @@ func init() {
 				fmt.Println("### THIS IS A DRY RUN ###")
 			}
 
-			cts, err := crontabs()
+			u, err := user.Current()
 			if err != nil {
-				return err
+				return fmt.Errorf("could not determine current user: %w", err)
 			}
+			cts := cron.TabsForUser(u)
 
 			var updates []func()
 			for _, ct := range cts {
-				fmt.Printf("Checking %s\n", ct.name())
+				fmt.Printf("Checking %s\n", ct)
 				tc, err := ct.Load()
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", ct.name(), err)
+					fmt.Fprintf(os.Stderr, "Could not load %s: %s\n", ct, err)
 					continue
 				}
 
@@ -54,12 +56,12 @@ func init() {
 					ct := ct
 					updates = append(updates, func() {
 						fmt.Println()
-						fmt.Printf("Updating %s...\n", ct.name())
+						fmt.Printf("Updating %s...\n", ct)
 						if dryRun {
-							fmt.Print(ct)
+							fmt.Print(tc)
 						} else {
 							if err := ct.Update(tc); err != nil {
-								fmt.Fprintf(os.Stderr, "Could not update %s: %s\n", ct.name(), err)
+								fmt.Fprintf(os.Stderr, "Could not update %s: %s\n", ct, err)
 							}
 						}
 					})

@@ -2,6 +2,7 @@ package cron
 
 import (
 	"fmt"
+	"os/user"
 	"path"
 	"strings"
 	"unicode"
@@ -25,7 +26,7 @@ type TabConfig struct {
 	jobs    []*Job
 }
 
-func parseTabConfig(crontab string, includesUser bool) (*TabConfig, error) {
+func parseTabConfig(crontab string, u *user.User) (*TabConfig, error) {
 	var tc TabConfig
 	ls := strings.Split(crontab, "\n")
 	hasComments := false // Whether we've attempted to write anything to comments. Use this instead of len(comments) to avoid collapsing multiple empty lines together.
@@ -47,7 +48,7 @@ func parseTabConfig(crontab string, includesUser bool) (*TabConfig, error) {
 		}
 
 		n := numScheduleFields + numCommandFields
-		if includesUser {
+		if u == nil {
 			n += numUserFields
 		}
 		seps, fs := fieldsN(l, n)
@@ -73,10 +74,18 @@ func parseTabConfig(crontab string, includesUser bool) (*TabConfig, error) {
 			schedule: sched,
 		}
 		j.sep1 = seps[i]
-		if includesUser {
+		if u == nil {
 			j.user = &fs[i]
 			i++
 			j.sep2 = seps[i]
+
+			if u, err := user.Lookup(*j.user); err != nil {
+				log.Warn().Err(err).Str("user", *j.user).Msg("Error looking up crontab user")
+			} else {
+				j.User = u
+			}
+		} else {
+			j.User = u
 		}
 		j.Command = NewCommand(fs[i])
 
@@ -89,6 +98,10 @@ func parseTabConfig(crontab string, includesUser bool) (*TabConfig, error) {
 	}
 
 	return &tc, nil
+}
+
+func isComment(s string) bool {
+	return strings.HasPrefix(strings.TrimSpace(s), "#")
 }
 
 func (tc *TabConfig) Jobs() []*Job {
@@ -121,6 +134,8 @@ type Job struct {
 	user     *string // may or may not be present. Not all crontabs specify a user per job.
 	sep2     string  // may or may not exist depending on whether user is present.
 	Command  *Command
+
+	User *user.User // may or may not be present depending on whether we were able to lookup user.
 }
 
 func (*Job) isEntry() {}
@@ -175,10 +190,6 @@ func (c *Command) Transform(f func(cmd string) string) {
 
 	c.orig = orig
 	c.args = args
-}
-
-func isComment(s string) bool {
-	return strings.HasPrefix(strings.TrimSpace(s), "#")
 }
 
 // fieldsN splits s into n fields separated by consecutive whitespace characters.

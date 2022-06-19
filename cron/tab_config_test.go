@@ -1,6 +1,7 @@
 package cron
 
 import (
+	"os/user"
 	"strings"
 	"testing"
 
@@ -106,36 +107,45 @@ func TestFieldsN(t *testing.T) {
 
 func TestTabConfigRoundtrip(t *testing.T) {
 	for _, tc := range []struct {
-		name          string
-		includesUsers bool
-		s             string
+		name string
+		u    *user.User
+		s    string
+
+		wantUser string
 	}{
 		{
 			name: "empty string",
+			u:    currentUserOrDie(),
 			s:    "",
 		},
 		{
 			name: "blank line",
+			u:    currentUserOrDie(),
 			s:    "\n",
 		},
 		{
 			name: "blank lines",
+			u:    currentUserOrDie(),
 			s:    "\n\n\n\n",
 		},
 		{
 			name: "comment",
+			u:    currentUserOrDie(),
 			s:    "# comment",
 		},
 		{
 			name: "comment with newlines",
+			u:    currentUserOrDie(),
 			s:    "\n# comment\n",
 		},
 		{
 			name: "comment with leading whitespace",
+			u:    currentUserOrDie(),
 			s:    "\n  # comment\n",
 		},
 		{
 			name: "crontab",
+			u:    currentUserOrDie(),
 			s: `
 * * * * * echo foo
   * * * * * echo bar
@@ -143,6 +153,7 @@ func TestTabConfigRoundtrip(t *testing.T) {
 		},
 		{
 			name: "crontab and comments",
+			u:    currentUserOrDie(),
 			s: `
 # comment
 * * * * * echo foo
@@ -153,32 +164,57 @@ func TestTabConfigRoundtrip(t *testing.T) {
 		},
 		{
 			name: "complicated command",
+			u:    currentUserOrDie(),
 			s: `
 * * * * * echo "foo bar"
 `,
 		},
 		{
-			name:          "crontab with users",
-			includesUsers: true,
+			name: "crontab with users",
+			u:    nil,
 			s: `
 * * * * * root echo foo
 `,
+			wantUser: "root",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if tab, err := parseTabConfig(tc.s, tc.includesUsers); err != nil {
+			if tab, err := parseTabConfig(tc.s, tc.u); err != nil {
 				t.Errorf("parse(tc.s) generated an error: %s", err)
 			} else if diff := cmp.Diff(strings.Split(tc.s, "\n"), strings.Split(tab.String(), "\n")); diff != "" {
 				t.Errorf("parse(tc.s) does not roundtrip (-want +got):\n%s", diff)
+			} else {
+				for i, j := range tab.Jobs() {
+					u := tc.u
+					if u == nil {
+						var err error
+						u, err = user.Lookup(tc.wantUser)
+						if err != nil {
+							t.Errorf("Could not lookup wantUser %q: %s", tc.wantUser, err)
+						}
+					}
+
+					if u != nil && j.User.Uid != u.Uid {
+						t.Errorf("tab job #%d has user %q, expected %q", i, j.User.Username, u.Username)
+					}
+				}
 			}
 		})
 	}
 }
 
+func currentUserOrDie() *user.User {
+	u, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 func TestParseTabConfig(t *testing.T) {
 	cmd1 := "* * * * * foo echo 1 2 3"
 	cmd2 := "* * * * * bar echo 4 5 6"
-	tab, err := parseTabConfig(cmd1+"\n"+cmd2, true)
+	tab, err := parseTabConfig(cmd1+"\n"+cmd2, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
 	}
@@ -196,7 +232,7 @@ func TestParseTabConfig(t *testing.T) {
 func TestTransform(t *testing.T) {
 	cmd1 := "* * * * * foo echo 1 2 3"
 	cmd2 := "* * * * * bar echo 4 5 6"
-	tab, err := parseTabConfig(cmd1+"\n"+cmd2, true)
+	tab, err := parseTabConfig(cmd1+"\n"+cmd2, nil)
 	if err != nil {
 		t.Fatalf("Unexpected error genreating cron.Tab: %s", err)
 	}
