@@ -224,10 +224,10 @@ func (c *CronJob) Plugin(ptr interface{}) bool {
 
 func (c *CronJob) onCreate() error {
 	defer logutil.StartTimer(zerolog.TraceLevel, "Plugin#OnCreate").Stop()
-	func() {
-		defer logutil.StartTimerLogger(log.Logger.With().Str("plugin", "discoverLocalCronJobIfNecessary").Logger(), zerolog.TraceLevel, "Plugin#OnCreate").Stop()
-		c.discoverLocalCronJobIfNecessary()
-	}()
+
+	t := logutil.StartTimerLogger(log.Logger.With().Str("plugin", "discoverLocalCronJobIfNecessary").Logger(), zerolog.TraceLevel, "Plugin#OnCreate")
+	c.discoverLocalCronJobIfNecessary()
+	t.Stop()
 
 	var fs []func() error
 	for _, p := range c.plugins {
