@@ -1,9 +1,13 @@
 package hass
 
 import (
+	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestCommandName(t *testing.T) {
@@ -102,5 +106,89 @@ func TestCommandName(t *testing.T) {
 				t.Errorf("commandName(%q, %q) = %q, want %q", tc.id, tc.cmd, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestExpireAfter(t *testing.T) {
+	topOfTheHour, err := time.Parse(time.RFC3339, "2000-01-01T00:00:00Z")
+	if err != nil {
+		t.Fatalf("Could not parse testing time: %s", err)
+	}
+
+	for _, tc := range []struct {
+		name  string
+		now   time.Time
+		sched string
+		want  time.Duration
+	}{
+		{
+			name:  "simple",
+			now:   topOfTheHour,
+			sched: "0 * * * * ",
+			want:  time.Hour + 60*time.Second,
+		},
+		{
+			name:  "cron job more frequently than default delay",
+			now:   topOfTheHour,
+			sched: "* * * * * ",
+			want:  time.Minute + 30*time.Second,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := cron.NewSchedule(tc.sched)
+			if err != nil {
+				t.Fatalf("cron.NewSchedule(%q) yielded an unexpected error: %s", tc.sched, err)
+			}
+			now = func() time.Time { return tc.now }
+			if got := expireAfter(&s); got != tc.want {
+				t.Errorf("expireAfter(%q) = %s, want %s", tc.sched, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfigRoundTrip(t *testing.T) {
+	dur := 70*time.Second + 5*time.Millisecond
+	c := config{
+		BaseTopic:       "baseTopic",
+		StateTopic:      "stateTopic",
+		ValueTemplate:   "valueTemplate",
+		AttributesTopic: "attributesTopic",
+
+		Device: deviceConfig{
+			Name:        "deviceConfigName",
+			Identifiers: []string{"deviceConfigIdentifier"},
+		},
+		UniqueID: "uniqueID",
+		ObjectID: "objectID",
+		Name:     "name",
+
+		DeviceClass: "deviceClass",
+		Icon:        "icon",
+
+		PayloadOn:  "payloadOn",
+		PayloadOff: "payloadOff",
+
+		ExpireAfter: &dur,
+	}
+
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("Could not marshal config: %s", err)
+	}
+
+	var c2 config
+	if err := json.Unmarshal(b, &c2); err != nil {
+		t.Fatalf("Could not unmarshal config: %s", err)
+	}
+
+	if diff := cmp.Diff(c, c2, cmpopts.IgnoreFields(config{}, "ExpireAfter")); diff != "" {
+		t.Errorf("Config did not roundtrip (-want +got):\n%s", diff)
+	}
+
+	if c.ExpireAfter == c2.ExpireAfter {
+		t.Errorf("Expected ExpireAfter to be different, but it was the same. got %s, want %s", c2.ExpireAfter, c.ExpireAfter)
+	} else if c.ExpireAfter.Truncate(time.Second) != *c2.ExpireAfter {
+		t.Errorf("Expected ExpireAfter to be truncated to seconds, but it wasn't. got %s, want %s", c2.ExpireAfter, c.ExpireAfter)
 	}
 }

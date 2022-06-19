@@ -64,16 +64,13 @@ func parseTabConfig(crontab string, u *user.User) (*TabConfig, error) {
 			s.WriteString(seps[i])
 			s.WriteString(fs[i])
 		}
-		sched, err := cron.ParseStandard(s.String())
+		sched, err := NewSchedule(s.String())
 		if err != nil {
 			return nil, fmt.Errorf("crontab has a malformed schedule %q: %w", s.String(), err)
 		}
 
 		var j Job
-		j.Schedule = Schedule{
-			orig:     s.String(),
-			schedule: sched,
-		}
+		j.Schedule = sched
 		j.sep1 = seps[i]
 		if u == nil {
 			j.user = &fs[i]
@@ -155,6 +152,17 @@ func (j *Job) String() string {
 type Schedule struct {
 	orig     string
 	schedule cron.Schedule
+}
+
+func NewSchedule(s string) (Schedule, error) {
+	sched, err := cron.ParseStandard(s)
+	if err != nil {
+		return Schedule{}, nil
+	}
+	return Schedule{
+		orig:     s,
+		schedule: sched,
+	}, nil
 }
 
 // Next returns the estimated next exectuion time of this Schedule that happens strictly after t.

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kballard/go-shellquote"
 
@@ -17,6 +18,10 @@ const (
 	successState = "success"
 
 	discoveryPrefix = "homeassistant"
+)
+
+var (
+	now = time.Now
 )
 
 type config struct {
@@ -35,34 +40,63 @@ type config struct {
 
 	PayloadOn  string `json:"payload_on"`
 	PayloadOff string `json:"payload_off"`
+
+	ExpireAfter *time.Duration `json:"expire_after"`
 }
 
 func (c config) MarshalJSON() ([]byte, error) {
-	type marshal config
-	b, err := json.Marshal(marshal(c))
+	type alias config
+	aux := struct {
+		ExpireAfter *int64 `json:"expire_after"`
+		alias
+	}{
+		alias: alias(c),
+	}
+	if c.ExpireAfter != nil {
+		exp := int64(c.ExpireAfter.Seconds())
+		aux.ExpireAfter = &exp
+	}
+	b, err := json.Marshal(aux)
 	if err != nil {
 		return nil, err
 	}
+
 	var m map[string]interface{}
 	if err := json.Unmarshal(b, &m); err != nil {
 		return nil, err
 	}
 	abbreviateConfig(m)
+
 	return json.Marshal(m)
 }
 
 func (c *config) UnmarshalJSON(b []byte) error {
-	type marshal *config
 	var m map[string]interface{}
 	if err := json.Unmarshal(b, &m); err != nil {
 		return err
 	}
 	expandConfig(m)
+
 	b, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, marshal(c))
+
+	type alias config
+	aux := struct {
+		ExpireAfter *int64 `json:"expire_after"`
+		*alias
+	}{
+		alias: (*alias)(c),
+	}
+	if err := json.Unmarshal(b, &aux); err != nil {
+		return err
+	}
+	if aux.ExpireAfter != nil {
+		dur := time.Duration(*aux.ExpireAfter) * time.Second
+		c.ExpireAfter = &dur
+	}
+	return nil
 }
 
 type deviceConfig struct {
@@ -125,6 +159,10 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 		PayloadOn:  failureState,
 		PayloadOff: successState,
 	}
+	if cj.Schedule != nil {
+		dur := expireAfter(cj.Schedule)
+		conf.ExpireAfter = &dur
+	}
 	b, err := json.Marshal(conf)
 	if err != nil {
 		return fmt.Errorf("could not marshal discovery config: %w", err)
@@ -175,11 +213,19 @@ func commandName(id string, c *cron.Command) string {
 	return strings.Join(args, " ")
 }
 
-func index(haystack []string, needle string) int {
-	for i, s := range haystack {
-		if s == needle {
-			return i
-		}
+func expireAfter(s *cron.Schedule) time.Duration {
+	now := now()
+	next := s.Next(now)
+	secondNext := s.Next(next)
+	gap := secondNext.Sub(next)
+
+	exp1 := next.Add(60 * time.Second)
+	exp2 := next.Add(time.Duration(int(gap.Nanoseconds()) / 2))
+	var dur time.Duration
+	if exp1.Before(exp2) {
+		dur = exp1.Sub(now)
+	} else {
+		dur = exp2.Sub(now)
 	}
-	return -1
+	return dur
 }
