@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.uber.org/multierr"
 
+	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/logutil"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
@@ -54,6 +55,9 @@ type Client interface {
 
 type CronJob struct {
 	ID string
+	// The configuration for this cron job on the host, if it's known.
+	Schedule *cron.Schedule
+	Command  *cron.Command
 
 	client      Client
 	topicPrefix string
@@ -61,9 +65,30 @@ type CronJob struct {
 	topics      map[Plugin]map[string]mqtt.RetainMode
 }
 
+type CronJobOption func(*CronJob)
+
+func CronJobPlugins(ps ...Plugin) CronJobOption {
+	return func(cj *CronJob) {
+		cj.plugins = append(cj.plugins, ps...)
+	}
+}
+
+func CronJobConfig(j *cron.Job) CronJobOption {
+	return func(cj *CronJob) {
+		cj.Schedule = &j.Schedule
+		cj.Command = j.Command
+	}
+}
+
+func CronJobCommand(args []string) CronJobOption {
+	return func(cj *CronJob) {
+		cj.Command = cron.NewCommand(strings.Join(args, " "))
+	}
+}
+
 // NewCronJob creates a new CronJob, and runs the provided plugins through Init and OnCreate.
-func NewCronJob(id string, c Client, ps ...Plugin) (*CronJob, error) {
-	cj, err := newCronJobNoCreate(id, c, ps)
+func NewCronJob(id string, c Client, opts ...CronJobOption) (*CronJob, error) {
+	cj, err := newCronJobNoCreate(id, c, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +100,7 @@ func NewCronJob(id string, c Client, ps ...Plugin) (*CronJob, error) {
 	return cj, nil
 }
 
-func newCronJobNoCreate(id string, c Client, ps []Plugin) (*CronJob, error) {
+func newCronJobNoCreate(id string, c Client, opts []CronJobOption) (*CronJob, error) {
 	if err := ValidateTopicComponent(id); err != nil {
 		return nil, fmt.Errorf("provided cron job ID is invalid: %w", err)
 	}
@@ -84,12 +109,14 @@ func newCronJobNoCreate(id string, c Client, ps []Plugin) (*CronJob, error) {
 		return nil, err
 	}
 
-	ps = append([]Plugin{&CorePlugin{}}, ps...)
 	cj := &CronJob{
 		ID:          id,
 		client:      c,
 		topicPrefix: fmt.Sprintf("%s/%s", d.topicPrefix, id),
-		plugins:     ps,
+		plugins:     []Plugin{&CorePlugin{}},
+	}
+	for _, opt := range opts {
+		opt(cj)
 	}
 
 	if err := cj.initPlugins(); err != nil {
@@ -99,6 +126,7 @@ func newCronJobNoCreate(id string, c Client, ps []Plugin) (*CronJob, error) {
 }
 
 func (c *CronJob) initPlugins() error {
+	defer logutil.StartTimer(zerolog.TraceLevel, "Plugin#Init").Stop()
 	reg := &topicRegister{
 		prefix:         c.topicPrefix,
 		suffixes:       make(map[string]Plugin),
@@ -195,6 +223,12 @@ func (c *CronJob) Plugin(ptr interface{}) bool {
 }
 
 func (c *CronJob) onCreate() error {
+	defer logutil.StartTimer(zerolog.TraceLevel, "Plugin#OnCreate").Stop()
+	func() {
+		defer logutil.StartTimerLogger(log.Logger.With().Str("plugin", "discoverLocalCronJobIfNecessary").Logger(), zerolog.TraceLevel, "Plugin#OnCreate").Stop()
+		c.discoverLocalCronJobIfNecessary()
+	}()
+
 	var fs []func() error
 	for _, p := range c.plugins {
 		p := p
@@ -204,6 +238,35 @@ func (c *CronJob) onCreate() error {
 		})
 	}
 	return MultiPublish(fs...)
+}
+
+func (c *CronJob) discoverLocalCronJobIfNecessary() {
+	if c.Schedule != nil && c.Command != nil {
+		return
+	}
+
+	d, err := CurrentDevice()
+	if err != nil {
+		log.Warn().Str("id", c.ID).Err(err).Msg("Could not find cron job configuration.")
+		return
+	}
+
+	js, err := DiscoverLocalCronJobsByID(cron.TabsForUser(d.User), d.User, []string{c.ID})
+	j, ok := js[c.ID]
+	if !ok {
+		log.Warn().Str("id", c.ID).Str("user", d.User.Username).Err(err).Msg("Could not find cron job configuration in any crontab for user.")
+		return
+	}
+
+	if c.Command != nil && j.Command.String() != c.Command.String() {
+		log.Warn().Str("id", c.ID).Str("got", j.Command.String()).Str("want", j.Command.String()).Msgf("Found cron job configuration that does not match current CronJob")
+	}
+	if c.Schedule == nil {
+		c.Schedule = &j.Schedule
+	}
+	if c.Command == nil {
+		c.Command = j.Command
+	}
 }
 
 // PublishResult publishes one or more messages to MQTT about the given execution result.

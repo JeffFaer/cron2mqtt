@@ -50,7 +50,7 @@ func TestPluginInit(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := mqttfake.NewClient()
-			_, err := NewCronJob("id", mqtt.NewClientForTesting(c), tc.plugins...)
+			_, err := NewCronJob("id", mqtt.NewClientForTesting(c), CronJobPlugins(tc.plugins...))
 			if err != nil {
 				if tc.wantErr == nil {
 					t.Errorf("NewCronJob unexpectedly failed with %v", err)
@@ -99,7 +99,7 @@ func TestPluginPublish(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := mqttfake.NewClient()
-			_, err := NewCronJob("id", mqtt.NewClientForTesting(c), tc.plugins...)
+			_, err := NewCronJob("id", mqtt.NewClientForTesting(c), CronJobPlugins(tc.plugins...))
 			if err != nil {
 				if tc.wantErr == nil {
 					t.Errorf("NewCronJob unexpectedly failed with %v", err)

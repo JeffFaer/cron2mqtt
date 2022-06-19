@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/multierr"
+
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
-	"go.uber.org/multierr"
 )
 
 // Plugin provides hooks to customize the CronJob's behavior.

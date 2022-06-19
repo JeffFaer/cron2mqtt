@@ -69,7 +69,7 @@ func parseTabConfig(crontab string, u *user.User) (*TabConfig, error) {
 		}
 
 		var j Job
-		j.schedule = schedule{
+		j.Schedule = Schedule{
 			orig:     s.String(),
 			schedule: sched,
 		}
@@ -129,7 +129,7 @@ func (c comment) String() string {
 }
 
 type Job struct {
-	schedule schedule
+	Schedule Schedule
 	sep1     string
 	user     *string // may or may not be present. Not all crontabs specify a user per job.
 	sep2     string  // may or may not exist depending on whether user is present.
@@ -141,7 +141,7 @@ type Job struct {
 func (*Job) isEntry() {}
 func (j *Job) String() string {
 	var b strings.Builder
-	b.WriteString(j.schedule.orig)
+	b.WriteString(j.Schedule.orig)
 	b.WriteString(j.sep1)
 	if j.user != nil {
 		b.WriteString(*j.user)
@@ -151,7 +151,7 @@ func (j *Job) String() string {
 	return b.String()
 }
 
-type schedule struct {
+type Schedule struct {
 	orig     string
 	schedule cron.Schedule
 }

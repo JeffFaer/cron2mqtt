@@ -34,7 +34,7 @@ func DiscoverRemoteCronJobs(ctx context.Context, c Client, fs ...func() Plugin) 
 		for _, f := range fs {
 			ps = append(ps, f())
 		}
-		cj, err := newCronJobNoCreate(id, c, ps)
+		cj, err := newCronJobNoCreate(id, c, []CronJobOption{CronJobPlugins(ps...)})
 		if err != nil {
 			return nil, fmt.Errorf("could not create cron job %q: %w", id, err)
 		}

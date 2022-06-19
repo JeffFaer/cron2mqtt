@@ -3,7 +3,11 @@ package hass
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/kballard/go-shellquote"
+
+	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
 )
@@ -112,8 +116,7 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 		},
 		UniqueID: cj.ID,
 		ObjectID: "cron_job_" + cj.ID,
-		// TODO: Figure out the name of the cron job.
-		Name: fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, "TODO"),
+		Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID, cj.Command)),
 
 		DeviceClass: "problem",
 		Icon:        "mdi:robot",
@@ -138,4 +141,33 @@ func nodeID(d mqttcron.Device) (string, error) {
 		return "", fmt.Errorf("calculated node ID is invalid: %w", err)
 	}
 	return id, nil
+}
+
+func commandName(id string, c *cron.Command) string {
+	args, ok := c.Args()
+	if !ok {
+		return c.String()
+	}
+
+	var shArgs []string
+	if i := index(args, "--"); i > 0 {
+		shArgs = args[i+1:]
+	} else if i := index(args, id); 0 <= i && i < len(args)-1 {
+		shArgs = args[i+1:]
+	}
+	if len(shArgs) > 0 {
+		if sp, err := shellquote.Split(strings.Join(shArgs, " ")); err == nil {
+			return strings.Join(sp, " ")
+		}
+	}
+	return strings.Join(args, " ")
+}
+
+func index(haystack []string, needle string) int {
+	for i, s := range haystack {
+		if s == needle {
+			return i
+		}
+	}
+	return -1
 }

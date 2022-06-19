@@ -36,7 +36,7 @@ func init() {
 
 			if c, err := loadConfig(); err != nil {
 				fmt.Fprintln(os.Stderr, err)
-			} else if err := publish(id, c, args, res); err != nil {
+			} else if err := publish(id, c, res); err != nil {
 				fmt.Fprintf(os.Stderr, "Could not publish to MQTT: %s\n", err)
 			}
 
@@ -54,7 +54,7 @@ func run(ctx context.Context, args []string) exec.Result {
 	return exec.Run(ctx, sh, "-c", strings.Join(args, " "))
 }
 
-func publish(id string, conf mqtt.Config, args []string, res exec.Result) error {
+func publish(id string, conf mqtt.Config, res exec.Result) error {
 	defer logutil.StartTimer(zerolog.InfoLevel, "Publishing to MQTT").Stop()
 	c, err := mqtt.NewClient(conf)
 	if err != nil {
@@ -63,7 +63,7 @@ func publish(id string, conf mqtt.Config, args []string, res exec.Result) error 
 	defer c.Close(250)
 
 	// TODO: Make the plugins configurable.
-	cj, err := mqttcron.NewCronJob(id, c, &hass.Plugin{})
+	cj, err := mqttcron.NewCronJob(id, c, mqttcron.CronJobCommand(os.Args), mqttcron.CronJobPlugins(&hass.Plugin{}))
 	if err != nil {
 		return fmt.Errorf("could not create mqttcron.CronJob: %w", err)
 	}
