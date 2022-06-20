@@ -63,7 +63,7 @@ func publish(id string, conf mqtt.Config, res exec.Result) error {
 	defer c.Close(250)
 
 	// TODO: Make the plugins configurable.
-	cj, err := mqttcron.NewCronJob(id, c, mqttcron.CronJobCommand(os.Args), mqttcron.CronJobPlugins(&hass.Plugin{}))
+	cj, err := mqttcron.NewCronJob(id, c, mqttcron.CronJobCommand(os.Args), mqttcron.CronJobPlugins(hass.NewPlugin()))
 	if err != nil {
 		return fmt.Errorf("could not create mqttcron.CronJob: %w", err)
 	}
