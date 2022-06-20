@@ -11,6 +11,7 @@ import (
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
+	"github.com/JeffreyFalgout/cron2mqtt/new"
 )
 
 const (
@@ -87,8 +88,7 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 		PayloadOff: successState,
 	}
 	if cj.Schedule != nil {
-		dur := seconds(expireAfter(cj.Schedule))
-		conf.ExpireAfter = &dur
+		conf.ExpireAfter = new.Ptr(seconds(expireAfter(cj.Schedule)))
 	}
 	b, err := json.Marshal(conf)
 	if err != nil {

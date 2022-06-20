@@ -10,6 +10,7 @@ import (
 
 	"github.com/JeffreyFalgout/cron2mqtt/exec"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
+	"github.com/JeffreyFalgout/cron2mqtt/new"
 )
 
 // Plugin provides hooks to customize the CronJob's behavior.
@@ -53,10 +54,8 @@ func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
 	var s *string
 	var t *time.Time
 	if cj.Schedule != nil {
-		st := cj.Schedule.String()
-		u := cj.Schedule.Next(time.Now())
-		s = &st
-		t = &u
+		s = new.Ptr(cj.Schedule.String())
+		t = new.Ptr(cj.Schedule.Next(time.Now()))
 	}
 	m := struct {
 		Schedule          *string    `json:"schedule"`

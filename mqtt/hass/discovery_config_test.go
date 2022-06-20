@@ -7,10 +7,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+
+	"github.com/JeffreyFalgout/cron2mqtt/new"
 )
 
 func TestBinarySensor(t *testing.T) {
-	dur := seconds(70*time.Second + 5*time.Millisecond)
 	c := binarySensor{
 		common: common{
 			BaseTopic:       "baseTopic",
@@ -28,7 +29,7 @@ func TestBinarySensor(t *testing.T) {
 
 			Icon: "icon",
 
-			ExpireAfter: &dur,
+			ExpireAfter: new.Ptr(seconds(70*time.Second + 5*time.Millisecond)),
 		},
 
 		DeviceClass: binarySensorDeviceClasses.problem,
