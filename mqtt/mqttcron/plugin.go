@@ -50,17 +50,20 @@ func (p *CorePlugin) Init(cj *CronJob, reg TopicRegister) error {
 }
 
 func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
-	var sched *string
+	var s *string
 	var t *time.Time
 	if cj.Schedule != nil {
+		st := cj.Schedule.String()
 		u := cj.Schedule.Next(time.Now())
-		s := cj.Schedule.String()
-		sched = &s
+		s = &st
 		t = &u
 	}
-	m := map[string]interface{}{
-		"schedule":          sched,
-		"nextExecutionTime": t,
+	m := struct {
+		Schedule          *string    `json:"schedule"`
+		NextExecutionTime *time.Time `json:"nextExecutionTime"`
+	}{
+		Schedule:          s,
+		NextExecutionTime: t,
 	}
 	b, err := json.Marshal(m)
 	if err != nil {

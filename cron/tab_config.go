@@ -171,7 +171,8 @@ func (s Schedule) Next(t time.Time) time.Time {
 }
 
 func (s Schedule) String() string {
-	return s.orig
+	f := strings.Fields(s.orig)
+	return strings.Join(f, " ")
 }
 
 type Command struct {
