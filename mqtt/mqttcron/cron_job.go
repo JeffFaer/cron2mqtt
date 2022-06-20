@@ -259,7 +259,7 @@ func (c *CronJob) discoverLocalCronJobIfNecessary() {
 	}
 
 	if c.Command != nil && !sameCron2mqttCommand(j.Command, c.Command) {
-		log.Warn().Str("id", c.ID).Str("got", j.Command.String()).Str("want", c.Command.String()).Msgf("Found cron job configuration that does not match current CronJob")
+		log.Warn().Str("id", c.ID).Str("found", j.Command.String()).Str("current", c.Command.String()).Msgf("Found cron job configuration that does not match currently executing command.")
 	}
 	if c.Schedule == nil {
 		c.Schedule = &j.Schedule
