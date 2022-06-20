@@ -54,7 +54,7 @@ type Client interface {
 }
 
 type CronJob struct {
-	ID string
+	id string
 	// The configuration for this cron job on the host, if it's known.
 	Schedule *cron.Schedule
 	Command  *cron.Command
@@ -100,6 +100,10 @@ func NewCronJob(id string, c Client, opts ...CronJobOption) (*CronJob, error) {
 	return cj, nil
 }
 
+func (c *CronJob) ID() string {
+	return c.id
+}
+
 func newCronJobNoCreate(id string, c Client, opts []CronJobOption) (*CronJob, error) {
 	if err := ValidateTopicComponent(id); err != nil {
 		return nil, fmt.Errorf("provided cron job ID is invalid: %w", err)
@@ -110,7 +114,7 @@ func newCronJobNoCreate(id string, c Client, opts []CronJobOption) (*CronJob, er
 	}
 
 	cj := &CronJob{
-		ID:          id,
+		id:          id,
 		client:      c,
 		topicPrefix: fmt.Sprintf("%s/%s", d.topicPrefix, id),
 		plugins:     []Plugin{&CorePlugin{}},
@@ -247,19 +251,19 @@ func (c *CronJob) discoverLocalCronJobIfNecessary() {
 
 	d, err := CurrentDevice()
 	if err != nil {
-		log.Warn().Str("id", c.ID).Err(err).Msg("Could not find cron job configuration.")
+		log.Warn().Str("id", c.id).Err(err).Msg("Could not find cron job configuration.")
 		return
 	}
 
-	js, err := DiscoverLocalCronJobsByID(cron.TabsForUser(d.User), d.User, []string{c.ID})
-	j, ok := js[c.ID]
+	js, err := DiscoverLocalCronJobsByID(cron.TabsForUser(d.User), d.User, []string{c.id})
+	j, ok := js[c.id]
 	if !ok {
-		log.Warn().Str("id", c.ID).Str("user", d.User.Username).Err(err).Msg("Could not find cron job configuration in any crontab for user.")
+		log.Warn().Str("id", c.id).Str("user", d.User.Username).Err(err).Msg("Could not find cron job configuration in any crontab for user.")
 		return
 	}
 
 	if c.Command != nil && !sameCron2mqttCommand(j.Command, c.Command) {
-		log.Warn().Str("id", c.ID).Str("found", j.Command.String()).Str("current", c.Command.String()).Msgf("Found cron job configuration that does not match currently executing command.")
+		log.Warn().Str("id", c.id).Str("found", j.Command.String()).Str("current", c.Command.String()).Msgf("Found cron job configuration that does not match currently executing command.")
 	}
 	if c.Schedule == nil {
 		c.Schedule = &j.Schedule

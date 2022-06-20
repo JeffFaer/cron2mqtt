@@ -56,10 +56,10 @@ func init() {
 				return nil
 			}
 			var remoteCronJobIDs []string
-			remoteCronJobByID := make(map[string]*mqttcron.CronJob)
+			remoteCronJobByID := make(map[string]mqttcron.DiscoveredCronJob)
 			for _, cj := range remote {
-				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID)
-				remoteCronJobByID[cj.ID] = cj
+				remoteCronJobIDs = append(remoteCronJobIDs, cj.ID())
+				remoteCronJobByID[cj.ID()] = cj
 			}
 			sort.Strings(remoteCronJobIDs)
 
@@ -100,7 +100,7 @@ func init() {
 				}
 
 				fmt.Println()
-				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID)
+				fmt.Printf("Would you like to delete %s? [yN] ", cj.ID())
 				var sel string
 				fmt.Scanln(&sel)
 				if strings.ToLower(sel) != "y" {
@@ -109,7 +109,7 @@ func init() {
 
 				t := logutil.StartTimerLogger(log.With().Str("id", id).Logger(), zerolog.InfoLevel, "Pruning")
 				if err := cj.Unpublish(ctx); err != nil {
-					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID, err)
+					fmt.Fprintf(os.Stderr, "Could not delete %s: %s\n", cj.ID(), err)
 				}
 				t.Stop()
 			}
@@ -120,7 +120,7 @@ func init() {
 	rootCmd.AddCommand(cmd)
 }
 
-func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]*mqttcron.CronJob, error) {
+func discoverRemoteCronJobs(ctx context.Context, cl *mqtt.Client) ([]mqttcron.DiscoveredCronJob, error) {
 	defer logutil.StartTimer(zerolog.InfoLevel, "Discovering remote cron jobs").Stop()
 	return mqttcron.DiscoverRemoteCronJobs(ctx, cl, hass.NewPlugin)
 }

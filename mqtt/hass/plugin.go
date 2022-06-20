@@ -50,7 +50,7 @@ func (p *Plugin) Init(cj *mqttcron.CronJob, reg mqttcron.TopicRegister) error {
 	// TODO: Add more sensors.
 	//   - Elapsed time
 	//   - stdout/stderr size?
-	p.configTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", p.discoveryPrefix, nodeID, cj.ID)
+	p.configTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", p.discoveryPrefix, nodeID, cj.ID())
 	reg.RegisterTopic(p.configTopic, mqtt.Retain)
 	return nil
 }
@@ -75,9 +75,9 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 				Name:        d.Hostname,
 				Identifiers: []string{d.ID},
 			},
-			UniqueID: cj.ID,
-			ObjectID: "cron_job_" + cj.ID,
-			Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID, cj.Command)),
+			UniqueID: cj.ID(),
+			ObjectID: "cron_job_" + cj.ID(),
+			Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID(), cj.Command)),
 
 			Icon: "mdi:robot",
 		},

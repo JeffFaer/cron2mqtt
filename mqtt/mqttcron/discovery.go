@@ -12,7 +12,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func DiscoverRemoteCronJobs(ctx context.Context, c Client, fs ...func() Plugin) ([]*CronJob, error) {
+type DiscoveredCronJob interface {
+	ID() string
+	Unpublish(context.Context) error
+}
+
+func DiscoverRemoteCronJobs(ctx context.Context, c Client, fs ...func() Plugin) ([]DiscoveredCronJob, error) {
 	d, err := CurrentDevice()
 	if err != nil {
 		return nil, err
@@ -25,7 +30,7 @@ func DiscoverRemoteCronJobs(ctx context.Context, c Client, fs ...func() Plugin) 
 		return nil, err
 	}
 
-	var cjs []*CronJob
+	var cjs []DiscoveredCronJob
 	for m := range ms {
 		id := m.Topic()
 		id = strings.TrimPrefix(id, pre)
@@ -92,7 +97,7 @@ func discoverRetainedMessages(ctx context.Context, topic string, c Client, keepA
 	return nil
 }
 
-// DiscoverLocalCronJobsById looks at local crontabs for cronjobs identified by one of the entries in ids.
+// DiscoverLocalCronJobsByID looks at local crontabs for cronjobs identified by one of the entries in ids.
 func DiscoverLocalCronJobsByID(cts []cron.Tab, u *user.User, ids []string) (map[string]*cron.Job, error) {
 	idSet := make(map[string]bool)
 	for _, id := range ids {
