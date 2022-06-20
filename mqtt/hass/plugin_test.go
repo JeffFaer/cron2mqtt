@@ -1,13 +1,10 @@
 package hass
 
 import (
-	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestCommandName(t *testing.T) {
@@ -144,51 +141,5 @@ func TestExpireAfter(t *testing.T) {
 				t.Errorf("expireAfter(%q) = %s, want %s", tc.sched, got, tc.want)
 			}
 		})
-	}
-}
-
-func TestConfigRoundTrip(t *testing.T) {
-	dur := 70*time.Second + 5*time.Millisecond
-	c := config{
-		BaseTopic:       "baseTopic",
-		StateTopic:      "stateTopic",
-		ValueTemplate:   "valueTemplate",
-		AttributesTopic: "attributesTopic",
-
-		Device: deviceConfig{
-			Name:        "deviceConfigName",
-			Identifiers: []string{"deviceConfigIdentifier"},
-		},
-		UniqueID: "uniqueID",
-		ObjectID: "objectID",
-		Name:     "name",
-
-		DeviceClass: "deviceClass",
-		Icon:        "icon",
-
-		PayloadOn:  "payloadOn",
-		PayloadOff: "payloadOff",
-
-		ExpireAfter: &dur,
-	}
-
-	b, err := json.Marshal(c)
-	if err != nil {
-		t.Fatalf("Could not marshal config: %s", err)
-	}
-
-	var c2 config
-	if err := json.Unmarshal(b, &c2); err != nil {
-		t.Fatalf("Could not unmarshal config: %s", err)
-	}
-
-	if diff := cmp.Diff(c, c2, cmpopts.IgnoreFields(config{}, "ExpireAfter")); diff != "" {
-		t.Errorf("Config did not roundtrip (-want +got):\n%s", diff)
-	}
-
-	if c.ExpireAfter == c2.ExpireAfter {
-		t.Errorf("Expected ExpireAfter to be different, but it was the same. got %s, want %s", c2.ExpireAfter, c.ExpireAfter)
-	} else if c.ExpireAfter.Truncate(time.Second) != *c2.ExpireAfter {
-		t.Errorf("Expected ExpireAfter to be truncated to seconds, but it wasn't. got %s, want %s", c2.ExpireAfter, c.ExpireAfter)
 	}
 }

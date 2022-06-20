@@ -22,86 +22,6 @@ var (
 	now = time.Now
 )
 
-type config struct {
-	BaseTopic       string `json:"~"`
-	StateTopic      string `json:"state_topic"`
-	ValueTemplate   string `json:"value_template"`
-	AttributesTopic string `json:"json_attributes_topic"`
-
-	Device   deviceConfig `json:"device"`
-	UniqueID string       `json:"unique_id"`
-	ObjectID string       `json:"object_id"`
-	Name     string       `json:"name"`
-
-	DeviceClass string `json:"device_class"`
-	Icon        string `json:"icon"`
-
-	PayloadOn  string `json:"payload_on"`
-	PayloadOff string `json:"payload_off"`
-
-	ExpireAfter *time.Duration `json:"expire_after"`
-}
-
-func (c config) MarshalJSON() ([]byte, error) {
-	type alias config
-	aux := struct {
-		ExpireAfter *int64 `json:"expire_after"`
-		alias
-	}{
-		alias: alias(c),
-	}
-	if c.ExpireAfter != nil {
-		exp := int64(c.ExpireAfter.Seconds())
-		aux.ExpireAfter = &exp
-	}
-	b, err := json.Marshal(aux)
-	if err != nil {
-		return nil, err
-	}
-
-	var m map[string]interface{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, err
-	}
-	abbreviateConfig(m)
-
-	return json.Marshal(m)
-}
-
-func (c *config) UnmarshalJSON(b []byte) error {
-	var m map[string]interface{}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return err
-	}
-	expandConfig(m)
-
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-
-	type alias config
-	aux := struct {
-		ExpireAfter *int64 `json:"expire_after"`
-		*alias
-	}{
-		alias: (*alias)(c),
-	}
-	if err := json.Unmarshal(b, &aux); err != nil {
-		return err
-	}
-	if aux.ExpireAfter != nil {
-		dur := time.Duration(*aux.ExpireAfter) * time.Second
-		c.ExpireAfter = &dur
-	}
-	return nil
-}
-
-type deviceConfig struct {
-	Name        string   `json:"name"`
-	Identifiers []string `json:"identifiers"`
-}
-
 // Plugin provides home assistant specific funcionality to mqttcron.CronJob.
 type Plugin struct {
 	mqttcron.NopPlugin
@@ -143,29 +63,31 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 	if !cj.Plugin(&cp) {
 		return fmt.Errorf("could not retrieve mqttcron.CorePlugin")
 	}
-	conf := config{
-		BaseTopic:       cp.ResultsTopic,
-		StateTopic:      "~",
-		ValueTemplate:   fmt.Sprintf("{%% if value_json.%s == 0 %%}%s{%% else %%}%s{%% endif %%}", mqttcron.ExitCodeAttributeName, successState, failureState),
-		AttributesTopic: "~",
+	conf := binarySensor{
+		common: common{
+			BaseTopic:       cp.ResultsTopic,
+			StateTopic:      "~",
+			ValueTemplate:   fmt.Sprintf("{%% if value_json.%s == 0 %%}%s{%% else %%}%s{%% endif %%}", mqttcron.ExitCodeAttributeName, successState, failureState),
+			AttributesTopic: "~",
 
-		Device: deviceConfig{
-			Name:        d.Hostname,
-			Identifiers: []string{d.ID},
+			Device: deviceConfig{
+				Name:        d.Hostname,
+				Identifiers: []string{d.ID},
+			},
+			UniqueID: cj.ID,
+			ObjectID: "cron_job_" + cj.ID,
+			Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID, cj.Command)),
+
+			Icon: "mdi:robot",
 		},
-		UniqueID: cj.ID,
-		ObjectID: "cron_job_" + cj.ID,
-		Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID, cj.Command)),
 
-		DeviceClass: "problem",
-		Icon:        "mdi:robot",
-
+		DeviceClass: binarySensorDeviceClasses.problem,
 		// These are inverted on purpose thanks to "device_class": "problem"
 		PayloadOn:  failureState,
 		PayloadOff: successState,
 	}
 	if cj.Schedule != nil {
-		dur := expireAfter(cj.Schedule)
+		dur := seconds(expireAfter(cj.Schedule))
 		conf.ExpireAfter = &dur
 	}
 	b, err := json.Marshal(conf)
