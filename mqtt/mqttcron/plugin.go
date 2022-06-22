@@ -3,6 +3,8 @@ package mqttcron
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +44,47 @@ type CorePlugin struct {
 	LastSuccessTopic string
 }
 
+var (
+	ExitCodeAttributeName = loadAttributeName(results{}, "ExitCode")
+)
+
+func loadAttributeName(s any, f string) string {
+	field, ok := reflect.TypeOf(s).FieldByName(f)
+	if !ok {
+		panic(fmt.Errorf("%T has no field %s", s, f))
+	}
+	return strings.SplitN(field.Tag.Get("json"), ",", 2)[0]
+}
+
+type metadata struct {
+	Schedule          *string    `json:"schedule"`
+	NextExecutionTime *time.Time `json:"next_execution_time"`
+}
+
+type results struct {
+	Args      []string     `json:"args"`
+	StartTime time.Time    `json:"start_time"`
+	EndTime   time.Time    `json:"end_time"`
+	Duration  milliseconds `json:"duration_ms"`
+	Stdout    string       `json:"stdout"`
+	Stderr    string       `json:"stderr"`
+	ExitCode  int          `json:"exit_code"`
+}
+
+type milliseconds time.Duration
+
+func (m milliseconds) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(m).Milliseconds())
+}
+func (m *milliseconds) UnmarshalJSON(b []byte) error {
+	var i int64
+	if err := json.Unmarshal(b, &i); err != nil {
+		return err
+	}
+	*m = milliseconds(time.Duration(i) * time.Millisecond)
+	return nil
+}
+
 func (p *CorePlugin) Init(cj *CronJob, reg TopicRegister) error {
 	p.DiscoveryTopic = reg.RegisterSuffix("discovery")
 	p.MetadataTopic = reg.RegisterSuffix("metadata")
@@ -57,10 +100,7 @@ func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
 		s = new.Ptr(cj.Schedule.String())
 		t = new.Ptr(cj.Schedule.Next(time.Now()))
 	}
-	m := struct {
-		Schedule          *string    `json:"schedule"`
-		NextExecutionTime *time.Time `json:"nextExecutionTime"`
-	}{
+	m := metadata{
 		Schedule:          s,
 		NextExecutionTime: t,
 	}
@@ -75,14 +115,14 @@ func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
 }
 
 func (p *CorePlugin) PublishResult(cj *CronJob, pub Publisher, res exec.Result) error {
-	results := map[string]interface{}{
-		"args":                res.Args,
-		"start_time":          res.Start,
-		"end_time":            res.End,
-		"duration_ms":         res.End.Sub(res.Start).Milliseconds(),
-		"stdout":              string(res.Stdout),
-		"stderr":              string(res.Stderr),
-		ExitCodeAttributeName: res.ExitCode,
+	results := results{
+		Args:      res.Args,
+		StartTime: res.Start,
+		EndTime:   res.End,
+		Duration:  milliseconds(res.End.Sub(res.Start)),
+		Stdout:    string(res.Stdout),
+		Stderr:    string(res.Stderr),
+		ExitCode:  res.ExitCode,
 	}
 	b, err := json.Marshal(results)
 	if err != nil {
