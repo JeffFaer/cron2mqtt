@@ -19,7 +19,7 @@ type common struct {
 	DeviceClass string `json:"device_class"`
 	Icon        string `json:"icon"`
 
-	ExpireAfter *seconds `json:"expire_after"`
+	ExpireAfter *seconds `json:"expire_after,omitempty"`
 }
 
 // seconds is a time.Duration with only second granularity when marshalling to JSON.
@@ -59,7 +59,27 @@ func (s *binarySensor) UnmarshalJSON(b []byte) error {
 	return unmarshalAbbreviatedJSON(b, (*alias)(s))
 }
 
+type sensor struct {
+	DeviceClass sensorDeviceClass `json:"device_class"`
+	common
+
+	UnitOfMeasurement unit       `json:"unit_of_measurement"`
+	StateClass        stateClass `json:"state_class"`
+}
+
+func (s sensor) MarshalJSON() ([]byte, error) {
+	type alias sensor
+	return marshalAbbreviatedJSON(alias(s))
+}
+func (s *sensor) UnmarshalJSON(b []byte) error {
+	type alias sensor
+	return unmarshalAbbreviatedJSON(b, (*alias)(s))
+}
+
 type binarySensorDeviceClass string
+type sensorDeviceClass string
+type unit string
+type stateClass string
 
 var (
 	binarySensorDeviceClasses = struct {
@@ -120,6 +140,277 @@ var (
 		update:          "update",
 		vibration:       "vibration",
 		window:          "window",
+	}
+	sensorDeviceClasses = struct {
+		apparentPower            sensorDeviceClass
+		aqi                      sensorDeviceClass
+		battery                  sensorDeviceClass
+		carbonDioxide            sensorDeviceClass
+		carbonMonoxide           sensorDeviceClass
+		current                  sensorDeviceClass
+		date                     sensorDeviceClass
+		duration                 sensorDeviceClass
+		energy                   sensorDeviceClass
+		frequency                sensorDeviceClass
+		gas                      sensorDeviceClass
+		humidity                 sensorDeviceClass
+		illuminance              sensorDeviceClass
+		monetary                 sensorDeviceClass
+		nitrogenDioxide          sensorDeviceClass
+		nitrogenMonoxide         sensorDeviceClass
+		nitrousOxide             sensorDeviceClass
+		ozone                    sensorDeviceClass
+		pm1                      sensorDeviceClass
+		pm10                     sensorDeviceClass
+		pm25                     sensorDeviceClass
+		powerFactor              sensorDeviceClass
+		power                    sensorDeviceClass
+		pressure                 sensorDeviceClass
+		reactivePower            sensorDeviceClass
+		signalStrength           sensorDeviceClass
+		sulphurDioxide           sensorDeviceClass
+		temperature              sensorDeviceClass
+		timestamp                sensorDeviceClass
+		volatileOrganicCompounds sensorDeviceClass
+		voltage                  sensorDeviceClass
+	}{
+		apparentPower:            "apparent_power",
+		aqi:                      "aqi",
+		battery:                  "battery",
+		carbonDioxide:            "carbon_dioxide",
+		carbonMonoxide:           "carbon_monoxide",
+		current:                  "current",
+		date:                     "date",
+		duration:                 "duration",
+		energy:                   "energy",
+		frequency:                "frequency",
+		gas:                      "gas",
+		humidity:                 "humidity",
+		illuminance:              "illuminance",
+		monetary:                 "monetary",
+		nitrogenDioxide:          "nitrogen_dioxide",
+		nitrogenMonoxide:         "nitrogen_monoxide",
+		nitrousOxide:             "nitrous_oxide",
+		ozone:                    "ozone",
+		pm1:                      "pm1",
+		pm10:                     "pm10",
+		pm25:                     "pm25",
+		powerFactor:              "power_factor",
+		power:                    "power",
+		pressure:                 "pressure",
+		reactivePower:            "reactive_power",
+		signalStrength:           "signal_strength",
+		sulphurDioxide:           "sulphur_dioxide",
+		temperature:              "temperature",
+		timestamp:                "timestamp",
+		volatileOrganicCompounds: "volatile_organic_compounds",
+		voltage:                  "voltage",
+	}
+	units = struct {
+		watt         unit
+		kilowatt     unit
+		volt         unit
+		wattHour     unit
+		kilowattHour unit
+		ampere       unit
+		voltAmpere   unit
+
+		degree unit
+
+		euro   unit
+		dollar unit
+		cent   unit
+
+		celsuis   unit
+		farenheit unit
+		kelvin    unit
+
+		microseconds unit
+		milliseconds unit
+		seconds      unit
+		minutes      unit
+		hours        unit
+		days         unit
+		weeks        unit
+		months       unit
+		years        unit
+
+		millimeters unit
+		centimeters unit
+		meters      unit
+		kilometers  unit
+
+		inches unit
+		feet   unit
+		yards  unit
+		miles  unit
+
+		liters      unit
+		milliliters unit
+		cubicMeters unit
+		cubicFeet   unit
+
+		gallons     unit
+		fluidOunces unit
+
+		squareMeters unit
+
+		grams      unit
+		kilograms  unit
+		milligrams unit
+		micrograms unit
+
+		ounces unit
+		pounds unit
+
+		percentage unit
+
+		millimetersPerDay unit
+		inchesPerDay      unit
+		metersPerSecond   unit
+		inchesPerHour     unit
+		kilometersPerHour unit
+		milesPerHour      unit
+
+		bits               unit
+		kilobits           unit
+		megabits           unit
+		gigabits           unit
+		bytes              unit
+		kilobytes          unit
+		megabytes          unit
+		gigabytes          unit
+		terabytes          unit
+		petabytes          unit
+		exabytes           unit
+		zettabytes         unit
+		yottabytes         unit
+		kibibytes          unit
+		mebibytes          unit
+		gibibytes          unit
+		tebibytes          unit
+		pebibytes          unit
+		exbibytes          unit
+		zebibytes          unit
+		yobibytes          unit
+		bitsPerSecond      unit
+		kilobitsPerSecond  unit
+		megabitsPerSecond  unit
+		gigabitsPerSecond  unit
+		bytesPerSecond     unit
+		kilobytesPerSecond unit
+		megabytesPerSecond unit
+		gigabytesPerSecond unit
+		kibibytesPerSecond unit
+		mebibytesPerSecond unit
+		gibibytesPerSecond unit
+	}{
+		watt:         "W",
+		kilowatt:     "kW",
+		volt:         "V",
+		wattHour:     "Wh",
+		kilowattHour: "kWh",
+		ampere:       "A",
+		voltAmpere:   "VA",
+
+		degree: "°",
+
+		euro:   "€",
+		dollar: "$",
+		cent:   "¢",
+
+		celsuis:   "°C",
+		farenheit: "°F",
+		kelvin:    "K",
+
+		microseconds: "μs",
+		milliseconds: "ms",
+		seconds:      "s",
+		minutes:      "min",
+		hours:        "h",
+		days:         "d",
+		weeks:        "w",
+		months:       "m",
+		years:        "y",
+
+		millimeters: "mm",
+		centimeters: "cm",
+		meters:      "m",
+		kilometers:  "km",
+
+		inches: "in",
+		feet:   "ft",
+		yards:  "yd",
+		miles:  "mi",
+
+		liters:      "L",
+		milliliters: "mL",
+		cubicMeters: "m³",
+		cubicFeet:   "ft³",
+
+		gallons:     "gal",
+		fluidOunces: "fl. oz.",
+
+		squareMeters: "m²",
+
+		grams:      "g",
+		kilograms:  "kg",
+		milligrams: "mg",
+		micrograms: "µg",
+
+		ounces: "oz",
+		pounds: "lb",
+
+		percentage: "%",
+
+		millimetersPerDay: "mm/d",
+		inchesPerDay:      "in/d",
+		metersPerSecond:   "m/s",
+		inchesPerHour:     "in/h",
+		kilometersPerHour: "km/h",
+		milesPerHour:      "mi/h",
+
+		bits:               "bit",
+		kilobits:           "kbit",
+		megabits:           "Mbit",
+		gigabits:           "Gbit",
+		bytes:              "B",
+		kilobytes:          "kB",
+		megabytes:          "MB",
+		gigabytes:          "GB",
+		terabytes:          "TB",
+		petabytes:          "PB",
+		exabytes:           "EB",
+		zettabytes:         "ZB",
+		yottabytes:         "YB",
+		kibibytes:          "KiB",
+		mebibytes:          "MiB",
+		gibibytes:          "GiB",
+		tebibytes:          "TiB",
+		pebibytes:          "PiB",
+		exbibytes:          "EiB",
+		zebibytes:          "ZiB",
+		yobibytes:          "YiB",
+		bitsPerSecond:      "bit/s",
+		kilobitsPerSecond:  "kbit/s",
+		megabitsPerSecond:  "mbit/s",
+		gigabitsPerSecond:  "gbit/s",
+		bytesPerSecond:     "B/s",
+		kilobytesPerSecond: "kB/s",
+		megabytesPerSecond: "MB/s",
+		gigabytesPerSecond: "GB/s",
+		kibibytesPerSecond: "KiB/s",
+		mebibytesPerSecond: "MiB/s",
+		gibibytesPerSecond: "GiB/s",
+	}
+	stateClasses = struct {
+		measurement     stateClass
+		total           stateClass
+		totalIncreasing stateClass
+	}{
+		measurement:     "measurement",
+		total:           "total",
+		totalIncreasing: "total_increasing",
 	}
 )
 

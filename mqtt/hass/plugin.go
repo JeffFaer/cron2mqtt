@@ -11,7 +11,6 @@ import (
 	"github.com/JeffreyFalgout/cron2mqtt/cron"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt"
 	"github.com/JeffreyFalgout/cron2mqtt/mqtt/mqttcron"
-	"github.com/JeffreyFalgout/cron2mqtt/new"
 )
 
 const (
@@ -28,7 +27,8 @@ type Plugin struct {
 	mqttcron.NopPlugin
 	discoveryPrefix string
 
-	configTopic string
+	problemConfigTopic  string
+	durationConfigTopic string
 }
 
 func NewPlugin() mqttcron.Plugin {
@@ -48,10 +48,11 @@ func (p *Plugin) Init(cj *mqttcron.CronJob, reg mqttcron.TopicRegister) error {
 	}
 
 	// TODO: Add more sensors.
-	//   - Elapsed time
 	//   - stdout/stderr size?
-	p.configTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", p.discoveryPrefix, nodeID, cj.ID())
-	reg.RegisterTopic(p.configTopic, mqtt.Retain)
+	p.problemConfigTopic = fmt.Sprintf("%s/binary_sensor/%s/%s/config", p.discoveryPrefix, nodeID, cj.ID())
+	p.durationConfigTopic = fmt.Sprintf("%s/sensor/%s/%s_duration/config", p.discoveryPrefix, nodeID, cj.ID())
+	reg.RegisterTopic(p.problemConfigTopic, mqtt.Retain)
+	reg.RegisterTopic(p.durationConfigTopic, mqtt.Retain)
 	return nil
 }
 
@@ -64,20 +65,23 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 	if !cj.Plugin(&cp) {
 		return fmt.Errorf("could not retrieve mqttcron.CorePlugin")
 	}
-	conf := binarySensor{
+
+	dev := deviceConfig{
+		Name:        d.Hostname,
+		Identifiers: []string{d.ID},
+	}
+	name := fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID(), cj.Command))
+	problemConf := binarySensor{
 		common: common{
 			BaseTopic:       cp.ResultsTopic,
 			StateTopic:      "~",
 			ValueTemplate:   fmt.Sprintf("{%% if value_json.%s == 0 %%}%s{%% else %%}%s{%% endif %%}", mqttcron.ExitCodeAttributeName, successState, failureState),
 			AttributesTopic: "~",
 
-			Device: deviceConfig{
-				Name:        d.Hostname,
-				Identifiers: []string{d.ID},
-			},
+			Device:   dev,
 			UniqueID: cj.ID(),
 			ObjectID: "cron_job_" + cj.ID(),
-			Name:     fmt.Sprintf("[%s@%s] %s", d.User.Username, d.Hostname, commandName(cj.ID(), cj.Command)),
+			Name:     name,
 
 			Icon: "mdi:robot",
 		},
@@ -87,17 +91,41 @@ func (p *Plugin) OnCreate(cj *mqttcron.CronJob, pub mqttcron.Publisher) error {
 		PayloadOn:  failureState,
 		PayloadOff: successState,
 	}
-	if cj.Schedule != nil {
-		conf.ExpireAfter = new.Ptr(seconds(expireAfter(cj.Schedule)))
+	durationConf := sensor{
+		common: common{
+			BaseTopic:       cp.ResultsTopic,
+			StateTopic:      "~",
+			ValueTemplate:   fmt.Sprintf("{{value_json.%s}}", mqttcron.DurationAttributeName),
+			AttributesTopic: "~",
+
+			Device:   dev,
+			UniqueID: cj.ID() + "_duration",
+			ObjectID: fmt.Sprintf("cron_job_%s_duration", cj.ID()),
+			Name:     "duration of " + name,
+
+			Icon: "mdi:timer",
+		},
+
+		DeviceClass:       sensorDeviceClasses.duration,
+		UnitOfMeasurement: units.milliseconds,
+		StateClass:        stateClasses.measurement,
 	}
-	b, err := json.Marshal(conf)
+	if cj.Schedule != nil {
+		exp := seconds(expireAfter(cj.Schedule))
+		problemConf.ExpireAfter = &exp
+		durationConf.ExpireAfter = &exp
+	}
+	pc, err := json.Marshal(problemConf)
 	if err != nil {
 		return fmt.Errorf("could not marshal discovery config: %w", err)
 	}
-	if err := pub.Publish(p.configTopic, mqtt.QoSExactlyOnce, mqtt.Retain, b); err != nil {
-		return fmt.Errorf("could not publish discovery config: %w", err)
+	dc, err := json.Marshal(durationConf)
+	if err != nil {
+		return fmt.Errorf("could not marshal discovery config: %w", err)
 	}
-	return nil
+	return mqttcron.MultiPublish(
+		func() error { return pub.Publish(p.problemConfigTopic, mqtt.QoSExactlyOnce, mqtt.Retain, pc) },
+		func() error { return pub.Publish(p.durationConfigTopic, mqtt.QoSExactlyOnce, mqtt.Retain, dc) })
 }
 
 func nodeID(d mqttcron.Device) (string, error) {

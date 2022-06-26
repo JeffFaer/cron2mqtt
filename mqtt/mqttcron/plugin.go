@@ -46,6 +46,7 @@ type CorePlugin struct {
 
 var (
 	ExitCodeAttributeName = loadAttributeName(results{}, "ExitCode")
+	DurationAttributeName = loadAttributeName(results{}, "Duration")
 )
 
 func loadAttributeName(s any, f string) string {
@@ -57,8 +58,8 @@ func loadAttributeName(s any, f string) string {
 }
 
 type metadata struct {
-	Schedule          *string    `json:"schedule"`
-	NextExecutionTime *time.Time `json:"next_execution_time"`
+	Schedule          string     `json:"schedule,omitempty"`
+	NextExecutionTime *time.Time `json:"next_execution_time,omitempty"`
 }
 
 type results struct {
@@ -94,15 +95,10 @@ func (p *CorePlugin) Init(cj *CronJob, reg TopicRegister) error {
 }
 
 func (p *CorePlugin) OnCreate(cj *CronJob, pub Publisher) error {
-	var s *string
-	var t *time.Time
+	m := metadata{}
 	if cj.Schedule != nil {
-		s = new.Ptr(cj.Schedule.String())
-		t = new.Ptr(cj.Schedule.Next(time.Now()))
-	}
-	m := metadata{
-		Schedule:          s,
-		NextExecutionTime: t,
+		m.Schedule = cj.Schedule.String()
+		m.NextExecutionTime = new.Ptr(cj.Schedule.Next(time.Now()))
 	}
 	b, err := json.Marshal(m)
 	if err != nil {
